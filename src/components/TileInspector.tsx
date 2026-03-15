@@ -1,8 +1,5 @@
-import { useEffect, useState } from 'react'
-
 import { useProjectStore } from '../store/projectStore'
-import { getRotatedTileViews, tileRotations, tileSides } from '../utils/compatibility'
-import type { TileRotation } from '../types/projectTypes'
+import { getRotatedTileViews, tileSides } from '../utils/compatibility'
 import { TilePreview } from './TilePreview'
 
 export function TileInspector() {
@@ -15,21 +12,15 @@ export function TileInspector() {
   const getTileBorders = useProjectStore((state) => state.getTileBorders)
   const getCompatibilityForTile = useProjectStore((state) => state.getCompatibilityForTile)
   const selectTile = useProjectStore((state) => state.selectTile)
-  const [previewRotation, setPreviewRotation] = useState<TileRotation>(0)
   const tile = tiles.find((entry) => entry.id === selectedTileId) ?? null
   const issues = validationIssues.filter((issue) => issue.tileId === selectedTileId)
   const borders = selectedTileId ? getTileBorders(selectedTileId) : null
   const compatibility = selectedTileId ? getCompatibilityForTile(selectedTileId) : null
   const rotatedViews = tile ? getRotatedTileViews({ ...tile, allowRotations: true }) : []
-  const previewView = rotatedViews.find((view) => view.rotation === previewRotation) ?? rotatedViews[0] ?? null
 
   const getTileName = (tileId: string) => tiles.find((entry) => entry.id === tileId)?.name || 'Untitled tile'
   const getTile = (tileId: string) => tiles.find((entry) => entry.id === tileId) ?? null
   const getLabelName = (labelId: string) => labels.find((entry) => entry.id === labelId)?.name || labelId || 'empty'
-
-  useEffect(() => {
-    setPreviewRotation(0)
-  }, [selectedTileId])
 
   return (
     <section className="panel">
@@ -52,46 +43,36 @@ export function TileInspector() {
             </label>
             <label className="field-group">
               <span>Rotations</span>
-              <div className="field-group__inline">
+              <div className="checkbox-field">
                 <input
                   type="checkbox"
                   aria-label="Allow rotations"
+                  className="checkbox-field__input"
                   checked={tile.allowRotations}
                   onChange={(event) => setTileRotationEnabled(tile.id, event.target.checked)}
                 />
+                <span className="checkbox-field__box" aria-hidden="true" />
                 <span>{tile.allowRotations ? 'Enabled' : 'Disabled'}</span>
               </div>
             </label>
-            <div className="inspector-block">
-              <h3>Rotated Preview</h3>
-              <div className="compatibility-side__matches" role="tablist" aria-label="Rotation preview selector">
-                {tileRotations.map((rotation) => (
-                  <button
-                    key={rotation}
-                    type="button"
-                    className="pixel-button"
-                    aria-pressed={previewRotation === rotation}
-                    onClick={() => setPreviewRotation(rotation)}
-                  >
-                    {rotation}°
-                  </button>
-                ))}
+            {tile.allowRotations ? (
+              <div className="inspector-block">
+                <div className="rotation-preview-row" aria-label="Rotation previews">
+                  {rotatedViews.map((view) => (
+                    <div key={view.rotation} className="rotation-preview-card">
+                      <TilePreview
+                        tile={tile}
+                        labels={labels}
+                        grid={view.rotatedGrid}
+                        size="small"
+                        ariaLabel={`Rotated preview ${view.rotation} degrees`}
+                      />
+                      <span className="rotation-preview-card__label">{view.rotation}°</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              {previewView ? (
-                <>
-                  <p className="panel-hint">Inspecting semantic grid at {previewView.rotation}°.</p>
-                  <TilePreview
-                    tile={tile}
-                    labels={labels}
-                    grid={previewView.rotatedGrid}
-                    size="large"
-                    ariaLabel={`Rotated preview ${previewView.rotation} degrees`}
-                  />
-                </>
-              ) : (
-                <p className="empty-copy">No rotated preview available.</p>
-              )}
-            </div>
+            ) : null}
             <div className="inspector-block">
               <h3>Validation</h3>
               {issues.length === 0 ? (

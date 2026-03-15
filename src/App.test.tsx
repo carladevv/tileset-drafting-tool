@@ -657,12 +657,15 @@ describe('Stage 1 editor UI', () => {
 
     const rotationToggle = screen.getByRole('checkbox', { name: /allow rotations/i })
     expect(rotationToggle).toBeChecked()
+    expect(screen.getByLabelText(/rotation previews/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/rotated preview 90 degrees/i)).toBeInTheDocument()
 
     await user.click(rotationToggle)
     expect(rotationToggle).not.toBeChecked()
     expect(screen.getByRole('button', { name: /tile_1.*rotations disabled/i })).toBeInTheDocument()
+    expect(screen.queryByLabelText(/rotation previews/i)).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '90°' }))
+    await user.click(rotationToggle)
 
     const preview = screen.getByLabelText(/rotated preview 90 degrees/i)
     const previewCells = Array.from(preview.querySelectorAll('.tile-preview__cell'))
