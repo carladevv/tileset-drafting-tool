@@ -11,6 +11,7 @@ export function TileEditorGrid() {
   const labels = useProjectStore((state) => state.project.cellLabels)
   const selectedLabelId = useProjectStore((state) => state.selectedLabelId)
   const paintCell = useProjectStore((state) => state.paintCell)
+  const selectLabel = useProjectStore((state) => state.selectLabel)
   const isPaintingRef = useRef(false)
   const tile = tiles.find((entry) => entry.id === selectedTileId) ?? null
 
@@ -86,6 +87,22 @@ export function TileEditorGrid() {
       </div>
       <div className="editor-panel__footer">
         <span>Active label: {labels.find((label) => label.id === selectedLabelId)?.name ?? 'None selected'}</span>
+        {labels.length > 0 ? (
+          <div className="editor-quick-palette" aria-label="Quick label palette">
+            {labels.map((label) => (
+              <button
+                key={label.id}
+                type="button"
+                className={`editor-quick-palette__swatch ${selectedLabelId === label.id ? 'is-selected' : ''}`}
+                aria-label={`Use ${label.name}`}
+                title={label.name}
+                onClick={() => selectLabel(label.id)}
+              >
+                <span style={{ backgroundColor: label.color }} />
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
     </section>
   )

@@ -170,6 +170,9 @@ button {
 .panel__footer,
 .editor-panel__footer {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   border-top: 1px solid #1b2629;
   background: rgba(27, 38, 41, 0.2);
@@ -595,34 +598,40 @@ input[type='color'] {
 
 .terrain-controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   gap: 12px;
+  align-items: end;
+}
+
+.terrain-controls__button {
+  white-space: nowrap;
 }
 
 .terrain-grid {
   display: grid;
-  gap: 6px;
+  gap: 1px;
   align-self: start;
+  padding: 1px;
+  background: #51656a;
 }
 
 .terrain-grid__cell {
-  display: grid;
-  place-items: center;
+  display: block;
   min-width: 48px;
   min-height: 48px;
-  padding: 4px;
-  border: 1px solid #1b2629;
-  background: #223033;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: #b5c8cc;
 }
 
 .terrain-grid__cell:hover {
-  background: #2a3a3e;
+  filter: brightness(1.04);
 }
 
 .terrain-grid__cell.is-selected {
   outline: 1px solid #ffb454;
-  outline-offset: 1px;
+  outline-offset: 0;
 }
 
 .terrain-grid__cell--empty,
@@ -638,6 +647,10 @@ input[type='color'] {
     #223033;
 }
 
+.terrain-grid__cell .tile-preview {
+  border: 0;
+}
+
 .terrain-grid__placeholder,
 .generated-cell-meta p {
   margin: 0;
@@ -645,6 +658,10 @@ input[type='color'] {
 }
 
 .terrain-grid__placeholder {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -653,6 +670,34 @@ input[type='color'] {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.editor-quick-palette {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.editor-quick-palette__swatch {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #1b2629;
+  background: #223033;
+}
+
+.editor-quick-palette__swatch span {
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.editor-quick-palette__swatch.is-selected {
+  outline: 1px solid #ffb454;
+  outline-offset: 1px;
 }
 
 @media (max-width: 1100px) {

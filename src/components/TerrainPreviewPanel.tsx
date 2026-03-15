@@ -4,8 +4,6 @@ import { useProjectStore } from '../store/projectStore'
 import { getGeneratedCellView } from '../utils/terrainGeneration'
 import { TilePreview } from './TilePreview'
 
-const formatBorder = (values: string[]) => `[${values.join(', ')}]`
-
 export function TerrainPreviewPanel() {
   const project = useProjectStore((state) => state.project)
   const terrain = useProjectStore((state) => state.generatedTerrain)
@@ -19,18 +17,14 @@ export function TerrainPreviewPanel() {
     () => getGeneratedCellView(project.tiles, selectedCell),
     [project.tiles, selectedCell],
   )
+  const labelNameById = useMemo(
+    () => Object.fromEntries(project.cellLabels.map((label) => [label.id, label.name])),
+    [project.cellLabels],
+  )
+  const formatBorder = (values: string[]) => `[${values.map((value) => labelNameById[value] ?? value).join(', ')}]`
 
   return (
     <section className="panel panel--terrain">
-      <div className="panel__header">
-        <div>
-          <p className="panel-kicker">Stage 4</p>
-          <h2>Terrain Preview</h2>
-        </div>
-        <button type="button" className="pixel-button" onClick={() => generateTerrainPreview()}>
-          Generate
-        </button>
-      </div>
       <div className="panel__body panel__body--stack panel__body--scroll">
         <div className="terrain-controls" aria-label="Terrain generation controls">
           <label className="field-group">
@@ -62,6 +56,9 @@ export function TerrainPreviewPanel() {
               onChange={(event) => updateGenerationSettings({ generationSeed: Number(event.target.value) || 0 })}
             />
           </label>
+          <button type="button" className="pixel-button terrain-controls__button" onClick={() => generateTerrainPreview()}>
+            Generate
+          </button>
         </div>
 
         {!terrain ? (

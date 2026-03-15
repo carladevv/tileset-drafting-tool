@@ -738,6 +738,35 @@ describe('Stage 1 editor UI', () => {
     expect(cell02).toHaveStyle({ backgroundColor: 'rgb(95, 191, 95)' })
   })
 
+  it('lets the user switch the active label from the tile editor quick palette', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    await user.click(screen.getByRole('tab', { name: /labels/i }))
+    await user.click(screen.getByRole('button', { name: /\+ add label/i }))
+    const firstLabelName = screen.getByLabelText(/name for label_/i)
+    await user.clear(firstLabelName)
+    await user.type(firstLabelName, 'Grass')
+    fireEvent.change(screen.getByLabelText(/color for grass/i), { target: { value: '#5fbf5f' } })
+
+    await user.click(screen.getByRole('button', { name: /\+ add label/i }))
+    const labelInputs = screen.getAllByRole('textbox').filter((input) => input.getAttribute('aria-label')?.match(/name for/i))
+    await user.clear(labelInputs[1])
+    await user.type(labelInputs[1], 'River')
+    fireEvent.change(screen.getByLabelText(/color for river/i), { target: { value: '#4aa3ff' } })
+
+    await user.click(screen.getByRole('tab', { name: /tiles/i }))
+    await user.click(screen.getByRole('button', { name: /\+ new tile/i }))
+
+    expect(screen.getByText(/active label: river/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /use grass/i }))
+
+    expect(screen.getByText(/active label: grass/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /use grass/i })).toHaveClass('is-selected')
+  })
+
   it('allows renaming the selected tile from the inspector', async () => {
     const user = userEvent.setup()
 
@@ -916,7 +945,9 @@ describe('Stage 1 editor UI', () => {
     await user.click(rotationToggle)
     expect(rotationToggle).not.toBeChecked()
     expect(screen.getByRole('button', { name: /tile_1/i })).not.toHaveAccessibleName(/rotations/i)
-    expect(screen.queryByLabelText(/rotation previews/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/rotation previews/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/rotated preview 0 degrees/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/rotated preview 90 degrees/i)).not.toBeInTheDocument()
 
     await user.click(rotationToggle)
 
@@ -963,6 +994,8 @@ describe('Stage 1 editor UI', () => {
     useProjectStore.getState().replaceProject(project)
 
     render(<App />)
+
+    await user.click(screen.getByRole('tab', { name: /terrain preview/i }))
 
     await user.clear(screen.getByRole('spinbutton', { name: /generation width/i }))
     await user.type(screen.getByRole('spinbutton', { name: /generation width/i }), '2')

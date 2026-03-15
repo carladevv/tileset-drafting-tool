@@ -19,7 +19,7 @@ export function TileInspector() {
   const issues = validationIssues.filter((issue) => issue.tileId === selectedTileId)
   const borders = selectedTileId ? getTileBorders(selectedTileId) : null
   const compatibility = selectedTileId ? getCompatibilityForTile(selectedTileId) : null
-  const rotatedViews = tile ? getRotatedTileViews({ ...tile, allowRotations: true }) : []
+  const rotatedViews = tile ? getRotatedTileViews({ ...tile, allowRotations: tile.allowRotations }) : []
 
   const getTileName = (tileId: string) => tiles.find((entry) => entry.id === tileId)?.name || 'Untitled tile'
   const getTile = (tileId: string) => tiles.find((entry) => entry.id === tileId) ?? null
@@ -79,24 +79,22 @@ export function TileInspector() {
                     <span>{tile.allowRotations ? 'Enabled' : 'Disabled'}</span>
                   </div>
                 </label>
-                {tile.allowRotations ? (
-                  <div className="inspector-block">
-                    <div className="rotation-preview-row" aria-label="Rotation previews">
-                      {rotatedViews.map((view) => (
-                        <div key={view.rotation} className="rotation-preview-card">
-                          <TilePreview
-                            tile={tile}
-                            labels={labels}
-                            grid={view.rotatedGrid}
-                            size="small"
-                            ariaLabel={`Rotated preview ${view.rotation} degrees`}
-                          />
-                          <span className="rotation-preview-card__label">{view.rotation}°</span>
-                        </div>
-                      ))}
-                    </div>
+                <div className="inspector-block">
+                  <div className="rotation-preview-row" aria-label="Rotation previews">
+                    {rotatedViews.map((view) => (
+                      <div key={view.rotation} className="rotation-preview-card">
+                        <TilePreview
+                          tile={tile}
+                          labels={labels}
+                          grid={view.rotatedGrid}
+                          size="small"
+                          ariaLabel={`Rotated preview ${view.rotation} degrees`}
+                        />
+                        <span className="rotation-preview-card__label">{view.rotation}°</span>
+                      </div>
+                    ))}
                   </div>
-                ) : null}
+                </div>
                 <div className="inspector-block">
                   <h3>Validation</h3>
                   {issues.length === 0 ? (
