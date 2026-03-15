@@ -5,7 +5,7 @@ import type {
   Tile,
   TileRotation,
 } from '../types/projectTypes'
-import { getRotatedTileViews, getOppositeSide } from './compatibility'
+import { getOppositeSide, getRotatedTileViews } from './compatibility'
 
 export type TerrainGenerationSettings = {
   width: number
@@ -17,6 +17,18 @@ export type TerrainCandidate = {
   tileId: string
   rotation: TileRotation
   view: RotatedTileView
+}
+
+type TileSide = 'north' | 'east' | 'south' | 'west'
+
+type Position = {
+  x: number
+  y: number
+}
+
+type NeighborConstraint = {
+  side: TileSide
+  neighbor: GeneratedCell
 }
 
 const DEFAULT_SEED = 0
@@ -36,7 +48,100 @@ const createSeededRandom = (seed: number) => {
   }
 }
 
-export const createEmptyGeneratedCell = (x: number, y: number, status: GeneratedCell['status'] = 'empty'): GeneratedCell => ({
+const shuffleInPlace = <T>(items: T[], random: () => number) => {
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1))
+    ;[items[index], items[swapIndex]] = [items[swapIndex], items[index]]
+  }
+
+  return items
+}
+
+const cloneGeneratedCell = (cell: GeneratedCell): GeneratedCell => ({
+  x: cell.x,
+  y: cell.y,
+  tileId: cell.tileId,
+  rotation: cell.rotation,
+  status: cell.status,
+})
+
+const cloneTerrain = (terrain: GeneratedTerrain): GeneratedTerrain => ({
+  width: terrain.width,
+  height: terrain.height,
+  seed: terrain.seed,
+  cells: terrain.cells.map((row) => row.map(cloneGeneratedCell)),
+})
+
+const getPlacedCellCount = (terrain: GeneratedTerrain) =>
+  terrain.cells.reduce(
+    (count, row) => count + row.filter((cell) => cell.status === 'placed').length,
+    0,
+  )
+
+const getCellAt = (terrain: GeneratedTerrain, x: number, y: number) =>
+  terrain.cells[y]?.[x] ?? null
+
+const getNeighborPositions = (x: number, y: number): Array<{ side: TileSide; x: number; y: number }> => [
+  { side: 'north', x, y: y - 1 },
+  { side: 'east', x: x + 1, y },
+  { side: 'south', x, y: y + 1 },
+  { side: 'west', x: x - 1, y },
+]
+
+const buildRotatedViewsByTileId = (tiles: Tile[]) =>
+  new Map<string, RotatedTileView[]>(tiles.map((tile) => [tile.id, getRotatedTileViews(tile)]))
+
+const getPlacedNeighborConstraints = (
+  terrain: GeneratedTerrain,
+  x: number,
+  y: number,
+): NeighborConstraint[] =>
+  getNeighborPositions(x, y)
+    .map(({ side, x: neighborX, y: neighborY }) => ({
+      side,
+      neighbor: getCellAt(terrain, neighborX, neighborY),
+    }))
+    .filter(
+      (entry): entry is NeighborConstraint =>
+        Boolean(entry.neighbor && entry.neighbor.status === 'placed' && entry.neighbor.tileId),
+    )
+
+const getPlacedNeighborView = (
+  rotatedViewsByTileId: Map<string, RotatedTileView[]>,
+  cell: GeneratedCell,
+): RotatedTileView | null => {
+  if (cell.status !== 'placed' || !cell.tileId) {
+    return null
+  }
+
+  const views = rotatedViewsByTileId.get(cell.tileId) ?? []
+  return views.find((view) => view.rotation === cell.rotation) ?? null
+}
+
+const candidateMatchesConstraint = (
+  candidate: TerrainCandidate,
+  constraint: NeighborConstraint,
+  rotatedViewsByTileId: Map<string, RotatedTileView[]>,
+) => {
+  const neighborView = getPlacedNeighborView(rotatedViewsByTileId, constraint.neighbor)
+  if (!neighborView) {
+    return false
+  }
+
+  const candidateSide = constraint.side
+  const neighborSide = getOppositeSide(candidateSide)
+
+  return (
+    serializeBorder(candidate.view.borders[candidateSide]) ===
+    serializeBorder(neighborView.borders[neighborSide])
+  )
+}
+
+export const createEmptyGeneratedCell = (
+  x: number,
+  y: number,
+  status: GeneratedCell['status'] = 'empty',
+): GeneratedCell => ({
   x,
   y,
   tileId: null,
@@ -44,7 +149,11 @@ export const createEmptyGeneratedCell = (x: number, y: number, status: Generated
   status,
 })
 
-export const createEmptyTerrain = ({ width, height, seed }: TerrainGenerationSettings): GeneratedTerrain => ({
+export const createEmptyTerrain = ({
+  width,
+  height,
+  seed,
+}: TerrainGenerationSettings): GeneratedTerrain => ({
   width: normalizeDimension(width),
   height: normalizeDimension(height),
   seed,
@@ -53,13 +162,11 @@ export const createEmptyTerrain = ({ width, height, seed }: TerrainGenerationSet
   ),
 })
 
-export const getGenerationCandidates = (
+const getAllRotatedCandidates = (
   tiles: Tile[],
-  northNeighbor: GeneratedCell | null,
-  westNeighbor: GeneratedCell | null,
-): TerrainCandidate[] => {
-  const rotatedViewsByTileId = new Map(tiles.map((tile) => [tile.id, getRotatedTileViews(tile)]))
-  const rotatedCandidates = tiles.flatMap((tile) =>
+  rotatedViewsByTileId: Map<string, RotatedTileView[]>,
+): TerrainCandidate[] =>
+  tiles.flatMap((tile) =>
     (rotatedViewsByTileId.get(tile.id) ?? []).map((view) => ({
       tileId: tile.id,
       rotation: view.rotation,
@@ -67,72 +174,179 @@ export const getGenerationCandidates = (
     })),
   )
 
-  return rotatedCandidates.filter((candidate) => {
-    if (northNeighbor?.status === 'placed' && northNeighbor.tileId) {
-      const northView = (rotatedViewsByTileId.get(northNeighbor.tileId) ?? []).find(
-        (view) => view.rotation === northNeighbor.rotation,
-      )
-      if (!northView || serializeBorder(northView.borders.south) !== serializeBorder(candidate.view.borders.north)) {
-        return false
-      }
-    }
-
-    if (westNeighbor?.status === 'placed' && westNeighbor.tileId) {
-      const westView = (rotatedViewsByTileId.get(westNeighbor.tileId) ?? []).find(
-        (view) => view.rotation === westNeighbor.rotation,
-      )
-      if (!westView || serializeBorder(westView.borders.east) !== serializeBorder(candidate.view.borders.west)) {
-        return false
-      }
-    }
-
-    return true
-  })
+export const getGenerationCandidatesForPosition = (
+  tiles: Tile[],
+  terrain: GeneratedTerrain,
+  x: number,
+  y: number,
+): TerrainCandidate[] => {
+  const rotatedViewsByTileId = buildRotatedViewsByTileId(tiles)
+  return getGenerationCandidatesForPositionWithCache(tiles, terrain, x, y, rotatedViewsByTileId)
 }
 
-export const generateTerrain = (tiles: Tile[], settings: TerrainGenerationSettings): GeneratedTerrain => {
+const getGenerationCandidatesForPositionWithCache = (
+  tiles: Tile[],
+  terrain: GeneratedTerrain,
+  x: number,
+  y: number,
+  rotatedViewsByTileId: Map<string, RotatedTileView[]>,
+): TerrainCandidate[] => {
+  const cell = getCellAt(terrain, x, y)
+  if (!cell || cell.status === 'placed') {
+    return []
+  }
+
+  const constraints = getPlacedNeighborConstraints(terrain, x, y)
+  const allCandidates = getAllRotatedCandidates(tiles, rotatedViewsByTileId)
+
+  // No placed neighbors yet: everything is allowed.
+  if (constraints.length === 0) {
+    return allCandidates
+  }
+
+  return allCandidates.filter((candidate) =>
+    constraints.every((constraint) =>
+      candidateMatchesConstraint(candidate, constraint, rotatedViewsByTileId),
+    ),
+  )
+}
+
+type NextCellChoice = {
+  x: number
+  y: number
+  candidates: TerrainCandidate[]
+}
+
+const findMostConstrainedEmptyCell = (
+  tiles: Tile[],
+  terrain: GeneratedTerrain,
+  rotatedViewsByTileId: Map<string, RotatedTileView[]>,
+): NextCellChoice | null => {
+  let bestChoice: NextCellChoice | null = null
+
+  for (let y = 0; y < terrain.height; y += 1) {
+    for (let x = 0; x < terrain.width; x += 1) {
+      const cell = terrain.cells[y][x]
+      if (cell.status === 'placed') {
+        continue
+      }
+
+      const candidates = getGenerationCandidatesForPositionWithCache(
+        tiles,
+        terrain,
+        x,
+        y,
+        rotatedViewsByTileId,
+      )
+
+      // Immediate contradiction: this is the best possible choice because it fails now.
+      if (candidates.length === 0) {
+        return { x, y, candidates }
+      }
+
+      if (!bestChoice || candidates.length < bestChoice.candidates.length) {
+        bestChoice = { x, y, candidates }
+
+        // MRV early exit: can't do better than 1.
+        if (candidates.length === 1) {
+          return bestChoice
+        }
+      }
+    }
+  }
+
+  return bestChoice
+}
+
+const markRemainingEmptyCellsAsInvalid = (terrain: GeneratedTerrain) => {
+  for (let y = 0; y < terrain.height; y += 1) {
+    for (let x = 0; x < terrain.width; x += 1) {
+      const cell = terrain.cells[y][x]
+      if (cell.status !== 'placed') {
+        terrain.cells[y][x] = createEmptyGeneratedCell(x, y, 'invalid')
+      }
+    }
+  }
+}
+
+const solveTerrain = (
+  tiles: Tile[],
+  terrain: GeneratedTerrain,
+  rotatedViewsByTileId: Map<string, RotatedTileView[]>,
+  random: () => number,
+  bestSnapshotRef: { terrain: GeneratedTerrain; placedCount: number },
+): boolean => {
+  const placedCount = getPlacedCellCount(terrain)
+  if (placedCount > bestSnapshotRef.placedCount) {
+    bestSnapshotRef.placedCount = placedCount
+    bestSnapshotRef.terrain = cloneTerrain(terrain)
+  }
+
+  const nextChoice = findMostConstrainedEmptyCell(tiles, terrain, rotatedViewsByTileId)
+
+  // No empty cells left => solved.
+  if (!nextChoice) {
+    return true
+  }
+
+  // Contradiction.
+  if (nextChoice.candidates.length === 0) {
+    return false
+  }
+
+  const candidates = shuffleInPlace([...nextChoice.candidates], random)
+
+  for (const candidate of candidates) {
+    terrain.cells[nextChoice.y][nextChoice.x] = {
+      x: nextChoice.x,
+      y: nextChoice.y,
+      tileId: candidate.tileId,
+      rotation: candidate.rotation,
+      status: 'placed',
+    }
+
+    const solved = solveTerrain(tiles, terrain, rotatedViewsByTileId, random, bestSnapshotRef)
+    if (solved) {
+      return true
+    }
+
+    terrain.cells[nextChoice.y][nextChoice.x] = createEmptyGeneratedCell(
+      nextChoice.x,
+      nextChoice.y,
+      'empty',
+    )
+  }
+
+  return false
+}
+
+export const generateTerrain = (
+  tiles: Tile[],
+  settings: TerrainGenerationSettings,
+): GeneratedTerrain => {
   const terrain = createEmptyTerrain(settings)
-  const random = createSeededRandom(settings.seed ?? DEFAULT_SEED)
-  const starterCandidates = tiles.map((tile) => ({
-    tileId: tile.id,
-    rotation: 0 as const,
-    view: getRotatedTileViews(tile)[0],
-  }))
 
   if (tiles.length === 0) {
     return terrain
   }
 
-  for (let y = 0; y < terrain.height; y += 1) {
-    for (let x = 0; x < terrain.width; x += 1) {
-      const northNeighbor = terrain.cells[y - 1]?.[x] ?? null
-      const westNeighbor = terrain.cells[y]?.[x - 1] ?? null
-      const candidates =
-        x === 0 && y === 0 ? starterCandidates.filter((candidate) => candidate.view) : getGenerationCandidates(tiles, northNeighbor, westNeighbor)
+  const random = createSeededRandom(settings.seed ?? DEFAULT_SEED)
+  const rotatedViewsByTileId = buildRotatedViewsByTileId(tiles)
 
-      if (candidates.length === 0) {
-        terrain.cells[y][x] = createEmptyGeneratedCell(x, y, 'empty')
-        continue
-      }
-
-      const selectedCandidate = candidates[Math.floor(random() * candidates.length)] ?? null
-
-      if (!selectedCandidate) {
-        terrain.cells[y][x] = createEmptyGeneratedCell(x, y, 'invalid')
-        continue
-      }
-
-      terrain.cells[y][x] = {
-        x,
-        y,
-        tileId: selectedCandidate.tileId,
-        rotation: selectedCandidate.rotation,
-        status: 'placed',
-      }
-    }
+  const bestSnapshotRef = {
+    terrain: cloneTerrain(terrain),
+    placedCount: 0,
   }
 
-  return terrain
+  const solved = solveTerrain(tiles, terrain, rotatedViewsByTileId, random, bestSnapshotRef)
+
+  if (solved) {
+    return terrain
+  }
+
+  const fallbackTerrain = cloneTerrain(bestSnapshotRef.terrain)
+  markRemainingEmptyCellsAsInvalid(fallbackTerrain)
+  return fallbackTerrain
 }
 
 export const getGeneratedCellView = (tiles: Tile[], cell: GeneratedCell | null) => {
@@ -165,10 +379,11 @@ export const getGeneratedCellView = (tiles: Tile[], cell: GeneratedCell | null) 
 export const cellMatchesNeighbor = (
   candidate: TerrainCandidate,
   neighbor: TerrainCandidate,
-  side: 'north' | 'west',
+  side: 'north' | 'west' | 'east' | 'south',
 ) => {
-  const candidateSide = side === 'north' ? 'north' : 'west'
-  const neighborSide = getOppositeSide(candidateSide)
-
-  return serializeBorder(candidate.view.borders[candidateSide]) === serializeBorder(neighbor.view.borders[neighborSide])
+  const neighborSide = getOppositeSide(side)
+  return (
+    serializeBorder(candidate.view.borders[side]) ===
+    serializeBorder(neighbor.view.borders[neighborSide])
+  )
 }
