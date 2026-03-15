@@ -11,14 +11,14 @@ export function TileListPanel() {
   const selectTile = useProjectStore((state) => state.selectTile)
 
   return (
-    <section className="panel">
+    <section className="panel panel--tiles">
       <div className="panel__header">
         <h2>Tiles</h2>
         <button type="button" className="pixel-button" onClick={() => createTile()}>
           + New Tile
         </button>
       </div>
-      <div className="panel__body panel__body--stack">
+      <div className="panel__body panel__body--stack panel__body--scroll">
         {tiles.length === 0 ? <p className="empty-copy">No tiles yet.</p> : null}
         {tiles.map((tile) => (
           <button
@@ -30,7 +30,7 @@ export function TileListPanel() {
             <TilePreview tile={tile} labels={labels} />
             <span className="tile-row__meta">
               <strong>{tile.name || 'Untitled tile'}</strong>
-              <span>{tile.allowRotations ? 'Rotations on' : 'Rotations off'}</span>
+              <span>Rotations enabled by default</span>
             </span>
           </button>
         ))}

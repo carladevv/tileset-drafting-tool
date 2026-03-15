@@ -5,7 +5,6 @@ export function TileInspector() {
   const selectedTileId = useProjectStore((state) => state.selectedTileId)
   const validationIssues = useProjectStore((state) => state.validationIssues)
   const updateTileName = useProjectStore((state) => state.updateTileName)
-  const setTileRotationEnabled = useProjectStore((state) => state.setTileRotationEnabled)
   const tile = tiles.find((entry) => entry.id === selectedTileId) ?? null
   const issues = validationIssues.filter((issue) => issue.tileId === selectedTileId)
 
@@ -21,15 +20,12 @@ export function TileInspector() {
           <>
             <label className="field-group">
               <span>Name</span>
-              <input value={tile.name} onChange={(event) => updateTileName(tile.id, event.target.value)} />
-            </label>
-            <label className="toggle-row">
               <input
-                type="checkbox"
-                checked={tile.allowRotations}
-                onChange={(event) => setTileRotationEnabled(tile.id, event.target.checked)}
+                type="text"
+                aria-label="Tile name"
+                value={tile.name}
+                onChange={(event) => updateTileName(tile.id, event.target.value)}
               />
-              <span>Allow rotations in later stages</span>
             </label>
             <div className="inspector-block">
               <h3>Validation</h3>

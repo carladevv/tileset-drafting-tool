@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import App from './App'
@@ -120,6 +121,11 @@ describe('Stage 1 store behavior', () => {
 })
 
 describe('Stage 1 editor UI', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    useProjectStore.getState().resetProject()
+  })
+
   it('renders painted cells with the active palette color and supports drag painting', () => {
     render(<App />)
 
@@ -143,5 +149,21 @@ describe('Stage 1 editor UI', () => {
     expect(cell00).toHaveStyle({ backgroundColor: 'rgb(95, 191, 95)' })
     expect(cell01).toHaveStyle({ backgroundColor: 'rgb(95, 191, 95)' })
     expect(cell02).toHaveStyle({ backgroundColor: 'rgb(95, 191, 95)' })
+  })
+
+  it('allows renaming the selected tile from the inspector', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /\+ new tile/i }))
+
+    const nameInput = screen.getByRole('textbox', { name: /tile name/i })
+    await user.clear(nameInput)
+    await user.type(nameInput, 'Cliff Edge')
+
+    expect(nameInput).toHaveValue('Cliff Edge')
+    expect(screen.getAllByRole('heading', { name: 'Cliff Edge' }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /cliff edge/i })).toBeInTheDocument()
   })
 })

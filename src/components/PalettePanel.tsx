@@ -16,14 +16,14 @@ export function PalettePanel() {
     )
 
   return (
-    <section className="panel">
+    <section className="panel panel--palette">
       <div className="panel__header">
         <h2>Palette</h2>
         <button type="button" className="pixel-button" onClick={() => createCellLabel()}>
           + Add Label
         </button>
       </div>
-      <div className="panel__body panel__body--stack">
+      <div className="panel__body panel__body--stack panel__body--scroll">
         {labels.length === 0 ? <p className="empty-copy">No labels yet.</p> : null}
         {labels.map((label) => {
           const usage = countUsage(label.id)
