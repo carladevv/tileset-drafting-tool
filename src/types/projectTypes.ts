@@ -75,12 +75,21 @@ export type TileBorders = {
   west: BorderArray
 }
 
+export type TileRotation = 0 | 90 | 180 | 270
+
+export type RotatedTileView = {
+  baseTileId: string
+  rotation: TileRotation
+  rotatedGrid: TileGrid
+  borders: TileBorders
+}
+
 export type CompatibilityMatch = {
   sourceTileId: string
   sourceSide: TileSide
   targetTileId: string
   targetSide: TileSide
-  targetRotation: 0 | 90 | 180 | 270
+  targetRotation: TileRotation
 }
 
 export type TileCompatibility = {

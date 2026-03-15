@@ -314,6 +314,12 @@ button {
   gap: 8px;
 }
 
+.field-group__inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .field-group span {
   font-size: 0.78rem;
   text-transform: uppercase;
@@ -336,6 +342,12 @@ input:not([type]),
   padding: 0 10px;
   width: 100%;
   min-width: 0;
+}
+
+.field-group input[type='checkbox'] {
+  min-height: auto;
+  width: auto;
+  padding: 0;
 }
 
 input[type='color'] {

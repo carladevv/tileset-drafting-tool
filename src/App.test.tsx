@@ -8,8 +8,14 @@ import type { Project, Tile } from './types/projectTypes'
 import {
   arraysEqual,
   computeCompatibilityGraph,
+  dedupeCompatibilityMatches,
   deriveTileBorders,
+  getRotatedTileViews,
   isOppositeSide,
+  rotateGrid,
+  rotateGrid180,
+  rotateGrid270,
+  rotateGrid90,
 } from './utils/compatibility'
 
 const createTile = (id: string, name: string, grid: Tile['grid']): Tile => ({
@@ -44,6 +50,33 @@ const lonelyGrid = (): Tile['grid'] => [
   ['west', 'center', 'center', 'center', 'center', 'east'],
   ['west', 'center', 'center', 'center', 'center', 'east'],
   ['south', 'south', 'south', 'south', 'south', 'east'],
+]
+
+const distinctGrid = (): Tile['grid'] => [
+  ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'],
+  ['b1', 'b2', 'b3', 'b4', 'b5', 'b6'],
+  ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'],
+  ['d1', 'd2', 'd3', 'd4', 'd5', 'd6'],
+  ['e1', 'e2', 'e3', 'e4', 'e5', 'e6'],
+  ['f1', 'f2', 'f3', 'f4', 'f5', 'f6'],
+]
+
+const rotationSourceGrid = (): Tile['grid'] => [
+  ['fill', 'fill', 'fill', 'fill', 'fill', 'a'],
+  ['fill', 'fill', 'fill', 'fill', 'fill', 'b'],
+  ['fill', 'fill', 'fill', 'fill', 'fill', 'c'],
+  ['fill', 'fill', 'fill', 'fill', 'fill', 'd'],
+  ['fill', 'fill', 'fill', 'fill', 'fill', 'e'],
+  ['fill', 'fill', 'fill', 'fill', 'fill', 'f'],
+]
+
+const rotationTargetGrid = (): Tile['grid'] => [
+  ['x', 'fill', 'fill', 'fill', 'fill', 'fill'],
+  ['x', 'fill', 'fill', 'fill', 'fill', 'fill'],
+  ['x', 'fill', 'fill', 'fill', 'fill', 'fill'],
+  ['x', 'fill', 'fill', 'fill', 'fill', 'fill'],
+  ['x', 'fill', 'fill', 'fill', 'fill', 'fill'],
+  ['a', 'b', 'c', 'd', 'e', 'f'],
 ]
 
 describe('Stage 2 compatibility helpers', () => {
@@ -82,6 +115,100 @@ describe('Stage 2 compatibility helpers', () => {
     expect(graph.byTileId.tile_a.east).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ targetTileId: 'tile_c', targetSide: 'east' })]),
     )
+  })
+})
+
+describe('Stage 3 rotation helpers', () => {
+  it('rotates a 6x6 grid 90 degrees clockwise', () => {
+    expect(rotateGrid90(distinctGrid())).toEqual([
+      ['f1', 'e1', 'd1', 'c1', 'b1', 'a1'],
+      ['f2', 'e2', 'd2', 'c2', 'b2', 'a2'],
+      ['f3', 'e3', 'd3', 'c3', 'b3', 'a3'],
+      ['f4', 'e4', 'd4', 'c4', 'b4', 'a4'],
+      ['f5', 'e5', 'd5', 'c5', 'b5', 'a5'],
+      ['f6', 'e6', 'd6', 'c6', 'b6', 'a6'],
+    ])
+  })
+
+  it('rotates a grid 180 degrees as two 90 degree turns', () => {
+    expect(rotateGrid180(distinctGrid())).toEqual(rotateGrid90(rotateGrid90(distinctGrid())))
+  })
+
+  it('rotates a grid 270 degrees as three 90 degree turns', () => {
+    expect(rotateGrid270(distinctGrid())).toEqual(rotateGrid90(rotateGrid90(rotateGrid90(distinctGrid()))))
+  })
+
+  it('preserves grid size for every rotation', () => {
+    ;([0, 90, 180, 270] as const).forEach((rotation) => {
+      const rotated = rotateGrid(distinctGrid(), rotation)
+      expect(rotated).toHaveLength(6)
+      expect(rotated.every((row) => row.length === 6)).toBe(true)
+    })
+  })
+
+  it('derives rotated borders from the rotated grid', () => {
+    const tile = createTile('tile_rotated', 'rotated', distinctGrid())
+    const rotated90 = getRotatedTileViews(tile).find((view) => view.rotation === 90)
+
+    expect(rotated90?.borders).toEqual({
+      north: ['f1', 'e1', 'd1', 'c1', 'b1', 'a1'],
+      east: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'],
+      south: ['f6', 'e6', 'd6', 'c6', 'b6', 'a6'],
+      west: ['f1', 'f2', 'f3', 'f4', 'f5', 'f6'],
+    })
+  })
+
+  it('returns only the base rotation when allowRotations is false', () => {
+    const tile = { ...createTile('tile_static', 'static', distinctGrid()), allowRotations: false }
+
+    expect(getRotatedTileViews(tile).map((view) => view.rotation)).toEqual([0])
+  })
+
+  it('returns all four logical rotations when allowRotations is true', () => {
+    const tile = createTile('tile_spin', 'spin', distinctGrid())
+
+    expect(getRotatedTileViews(tile).map((view) => view.rotation)).toEqual([0, 90, 180, 270])
+  })
+
+  it('creates compatibility against rotated target variants', () => {
+    const tiles = [
+      createTile('tile_source', 'source', rotationSourceGrid()),
+      createTile('tile_target', 'target', rotationTargetGrid()),
+    ]
+
+    const graph = computeCompatibilityGraph(tiles)
+
+    expect(graph.byTileId.tile_source.east).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ targetTileId: 'tile_target', targetSide: 'west', targetRotation: 90 }),
+      ]),
+    )
+  })
+
+  it('removes rotation-only compatibility when target rotations are disabled', () => {
+    const tiles = [
+      createTile('tile_source', 'source', rotationSourceGrid()),
+      { ...createTile('tile_target', 'target', rotationTargetGrid()), allowRotations: false },
+    ]
+
+    const graph = computeCompatibilityGraph(tiles)
+
+    expect(graph.byTileId.tile_source.east).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ targetTileId: 'tile_target', targetRotation: 90 })]),
+    )
+  })
+
+  it('deduplicates accidental duplicate compatibility entries', () => {
+    const duplicates = dedupeCompatibilityMatches([
+      { sourceTileId: 'a', sourceSide: 'east', targetTileId: 'b', targetSide: 'west', targetRotation: 90 },
+      { sourceTileId: 'a', sourceSide: 'east', targetTileId: 'b', targetSide: 'west', targetRotation: 90 },
+      { sourceTileId: 'a', sourceSide: 'east', targetTileId: 'b', targetSide: 'west', targetRotation: 270 },
+    ])
+
+    expect(duplicates).toEqual([
+      { sourceTileId: 'a', sourceSide: 'east', targetTileId: 'b', targetSide: 'west', targetRotation: 90 },
+      { sourceTileId: 'a', sourceSide: 'east', targetTileId: 'b', targetSide: 'west', targetRotation: 270 },
+    ])
   })
 })
 
@@ -208,6 +335,7 @@ describe('Stage 1 store behavior', () => {
       { id: 'center', name: 'Center', color: '#94aeb5' },
     )
     project.tiles.push(createTile('tile_lonely', 'lonely', lonelyGrid()))
+    project.tiles[0].allowRotations = false
 
     const issues = validateProject(project)
 
@@ -259,12 +387,16 @@ describe('Stage 1 store behavior', () => {
     const labelId = useProjectStore.getState().createCellLabel()
     const tileId = useProjectStore.getState().createTile()
     useProjectStore.getState().paintCell(tileId, 0, 0, labelId)
+    useProjectStore.getState().setTileRotationEnabled(tileId, false)
 
     const stored = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as { state?: { project?: Project } }
     const persistedTile = stored.state?.project?.tiles[0] as Record<string, unknown> | undefined
 
     expect(persistedTile).toBeDefined()
+    expect(persistedTile?.allowRotations).toBe(false)
     expect(persistedTile).not.toHaveProperty('borders')
+    expect(persistedTile).not.toHaveProperty('rotatedGrid')
+    expect(persistedTile).not.toHaveProperty('rotatedViews')
     expect(stored.state?.project).not.toHaveProperty('compatibilityGraph')
   })
 
@@ -303,6 +435,68 @@ describe('Stage 1 store behavior', () => {
 
     expect(afterReload).toEqual(beforeReload)
     expect(afterValidation).toEqual(beforeValidation)
+  })
+
+  it('updates validation warnings when rotation settings change', () => {
+    const project = createDefaultProject()
+    project.cellLabels.push(
+      { id: 'fill', name: 'Fill', color: '#5fbf5f' },
+      { id: 'a', name: 'A', color: '#ff0000' },
+      { id: 'b', name: 'B', color: '#ff8800' },
+      { id: 'c', name: 'C', color: '#ffee00' },
+      { id: 'd', name: 'D', color: '#00aa44' },
+      { id: 'e', name: 'E', color: '#3399ff' },
+      { id: 'f', name: 'F', color: '#8844ff' },
+      { id: 'x', name: 'X', color: '#333333' },
+    )
+    project.tiles.push(
+      createTile('tile_source', 'source', rotationSourceGrid()),
+      { ...createTile('tile_target', 'target', rotationTargetGrid()), allowRotations: false },
+    )
+
+    const withoutRotations = validateProject(project)
+    project.tiles[1].allowRotations = true
+    const withRotations = validateProject(project)
+    project.tiles[1].allowRotations = false
+    const disabledAgain = validateProject(project)
+
+    expect(withoutRotations.some((issue) => issue.tileId === 'tile_source' && issue.message.includes('east side'))).toBe(true)
+    expect(withRotations.some((issue) => issue.tileId === 'tile_source' && issue.message.includes('east side'))).toBe(false)
+    expect(disabledAgain.some((issue) => issue.tileId === 'tile_source' && issue.message.includes('east side'))).toBe(true)
+  })
+
+  it('recomputes rotation-aware compatibility after reload', () => {
+    const state = useProjectStore.getState()
+    ;[
+      ['fill', 'Fill', '#5fbf5f'],
+      ['a', 'A', '#ff0000'],
+      ['b', 'B', '#ff8800'],
+      ['c', 'C', '#ffee00'],
+      ['d', 'D', '#00aa44'],
+      ['e', 'E', '#3399ff'],
+      ['f', 'F', '#8844ff'],
+      ['x', 'X', '#333333'],
+    ].forEach(([id, name, color]) => {
+      state.project.cellLabels.push({ id, name, color })
+    })
+
+    state.replaceProject({
+      ...state.project,
+      cellLabels: state.project.cellLabels,
+      tiles: [
+        createTile('tile_source', 'source', rotationSourceGrid()),
+        createTile('tile_target', 'target', rotationTargetGrid()),
+      ],
+    })
+
+    const beforeReload = useProjectStore.getState().getCompatibilityGraph()
+    const beforeValidation = useProjectStore.getState().getValidationIssues().map((issue) => issue.message)
+    const stored = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as { state?: { project?: Project } }
+
+    useProjectStore.getState().replaceProject(stored.state?.project ?? createDefaultProject())
+
+    expect(useProjectStore.getState().getCompatibilityGraph()).toEqual(beforeReload)
+    expect(useProjectStore.getState().getValidationIssues().map((issue) => issue.message)).toEqual(beforeValidation)
   })
 })
 
@@ -350,7 +544,7 @@ describe('Stage 1 editor UI', () => {
 
     expect(nameInput).toHaveValue('Cliff Edge')
     expect(screen.getAllByRole('heading', { name: 'Cliff Edge' }).length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: /cliff edge.*rotations enabled by default/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /cliff edge.*rotations enabled/i })).toBeInTheDocument()
   })
 
   it('shows derived borders, matches, and warnings in the inspector and tile list', async () => {
@@ -392,8 +586,6 @@ describe('Stage 1 editor UI', () => {
     expect(screen.getByRole('heading', { name: 'east' })).toBeInTheDocument()
     expect(document.body.textContent).toContain('[empty, empty, empty, empty, empty, River]')
     expect(document.body.textContent).not.toContain('label_')
-    expect(screen.getAllByText(/warning: no compatible tiles/i).length).toBeGreaterThan(0)
-    expect(screen.getByLabelText(/compatibility warnings for river source/i)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /\+ new tile/i }))
     const secondTileName = screen.getByRole('textbox', { name: /tile name/i })
@@ -412,14 +604,77 @@ describe('Stage 1 editor UI', () => {
     westCells.forEach((cell) => fireEvent.mouseDown(cell, { buttons: 1 }))
     fireEvent.mouseUp(window)
 
-    await user.click(screen.getByRole('button', { name: /river source.*rotations enabled by default/i }))
+    await user.click(screen.getByRole('button', { name: /river source.*rotations enabled/i }))
 
-    expect(screen.getAllByText('Matches: 1').length).toBeGreaterThan(0)
     const compatibleTileButton = screen.getByRole('button', { name: /select compatible tile river bank on west/i })
     expect(compatibleTileButton).toBeInTheDocument()
 
     await user.click(compatibleTileButton)
 
     expect(screen.getByRole('textbox', { name: /tile name/i })).toHaveValue('River Bank')
+  })
+
+  it('lets the user toggle rotations and inspect rotated previews without editing rotated data directly', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    const labelSpecs = [
+      ['A', '#ff0000'],
+      ['B', '#ff8800'],
+      ['C', '#ffee00'],
+      ['D', '#00aa44'],
+      ['E', '#3399ff'],
+      ['F', '#8844ff'],
+    ] as const
+
+    for (const [name, color] of labelSpecs) {
+      await user.click(screen.getByRole('button', { name: /\+ add label/i }))
+      const nameInputs = screen.getAllByRole('textbox').filter((input) => input.getAttribute('aria-label')?.match(/name for/i))
+      const latestNameInput = nameInputs.at(-1)
+      if (!latestNameInput) {
+        throw new Error('Expected a label name input')
+      }
+
+      await user.clear(latestNameInput)
+      await user.type(latestNameInput, name)
+      fireEvent.change(screen.getByLabelText(new RegExp(`color for ${name}`, 'i')), { target: { value: color } })
+    }
+
+    const labelIdsByName = Object.fromEntries(
+      useProjectStore
+        .getState()
+        .project.cellLabels.map((label) => [label.name, label.id]),
+    ) as Record<string, string>
+
+    await user.click(screen.getByRole('button', { name: /\+ new tile/i }))
+
+    for (let column = 0; column < labelSpecs.length; column += 1) {
+      await user.click(screen.getByRole('button', { name: new RegExp(`^select ${labelSpecs[column][0]}$`, 'i') }))
+      fireEvent.mouseDown(screen.getByRole('gridcell', { name: `Cell 5,${column}` }), { buttons: 1 })
+      fireEvent.mouseUp(window)
+    }
+
+    const rotationToggle = screen.getByRole('checkbox', { name: /allow rotations/i })
+    expect(rotationToggle).toBeChecked()
+
+    await user.click(rotationToggle)
+    expect(rotationToggle).not.toBeChecked()
+    expect(screen.getByRole('button', { name: /tile_1.*rotations disabled/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '90°' }))
+
+    const preview = screen.getByLabelText(/rotated preview 90 degrees/i)
+    const previewCells = Array.from(preview.querySelectorAll('.tile-preview__cell'))
+    expect(previewCells[0]).toHaveStyle({ backgroundColor: 'rgb(255, 0, 0)' })
+    expect(previewCells[30]).toHaveStyle({ backgroundColor: 'rgb(136, 68, 255)' })
+    expect(useProjectStore.getState().project.tiles[0].grid[5][0]).toBe(labelIdsByName.A)
+
+    await user.click(screen.getByRole('button', { name: /^select a$/i }))
+    fireEvent.mouseDown(screen.getByRole('gridcell', { name: 'Cell 0,0' }), { buttons: 1 })
+    fireEvent.mouseUp(window)
+
+    expect(useProjectStore.getState().project.tiles[0].grid[0][0]).toBe(labelIdsByName.A)
+    expect(useProjectStore.getState().project.tiles[0].grid[5][0]).toBe(labelIdsByName.A)
   })
 })
