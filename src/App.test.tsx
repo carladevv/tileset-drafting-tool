@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -17,6 +17,7 @@ import {
   rotateGrid270,
   rotateGrid90,
 } from './utils/compatibility'
+import { generateTerrain, getGeneratedCellView, getGenerationCandidates } from './utils/terrainGeneration'
 
 const createTile = (id: string, name: string, grid: Tile['grid']): Tile => ({
   id,
@@ -78,6 +79,38 @@ const rotationTargetGrid = (): Tile['grid'] => [
   ['x', 'fill', 'fill', 'fill', 'fill', 'fill'],
   ['a', 'b', 'c', 'd', 'e', 'f'],
 ]
+
+const uniformGrid = (label: string): Tile['grid'] => Array.from({ length: 6 }, () => Array.from({ length: 6 }, () => label))
+
+const westEdgeGrid = (label: string, fill = 'fill'): Tile['grid'] =>
+  Array.from({ length: 6 }, (_, row) =>
+    Array.from({ length: 6 }, (_, column) => {
+      if (column === 0) {
+        return label
+      }
+
+      if (column === 5) {
+        return `${fill}_${row}`
+      }
+
+      return fill
+    }),
+  )
+
+const eastEdgeGrid = (label: string, fill = 'fill'): Tile['grid'] =>
+  Array.from({ length: 6 }, (_, row) =>
+    Array.from({ length: 6 }, (_, column) => {
+      if (column === 5) {
+        return label
+      }
+
+      if (column === 0) {
+        return `${fill}_${row}`
+      }
+
+      return fill
+    }),
+  )
 
 describe('Stage 2 compatibility helpers', () => {
   it('derives north, south, west, and east borders from a 6x6 grid', () => {
@@ -209,6 +242,178 @@ describe('Stage 3 rotation helpers', () => {
       { sourceTileId: 'a', sourceSide: 'east', targetTileId: 'b', targetSide: 'west', targetRotation: 90 },
       { sourceTileId: 'a', sourceSide: 'east', targetTileId: 'b', targetSide: 'west', targetRotation: 270 },
     ])
+  })
+})
+
+describe('Stage 4 terrain generation helpers', () => {
+  it('creates a generated terrain with the requested dimensions and cell structure', () => {
+    const terrain = generateTerrain([createTile('tile_grass', 'grass', uniformGrid('grass'))], {
+      width: 20,
+      height: 15,
+      seed: 1234,
+    })
+
+    expect(terrain.width).toBe(20)
+    expect(terrain.height).toBe(15)
+    expect(terrain.cells).toHaveLength(15)
+    expect(terrain.cells.every((row) => row.length === 20)).toBe(true)
+    expect(terrain.cells[0][0]).toEqual(
+      expect.objectContaining({
+        tileId: expect.any(String),
+        rotation: expect.any(Number),
+        status: expect.stringMatching(/placed|empty|invalid/),
+      }),
+    )
+  })
+
+  it('filters candidates to only compatibility-valid tile rotations', () => {
+    const sourceCell = { x: 0, y: 0, tileId: 'tile_source', rotation: 0 as const, status: 'placed' as const }
+    const tiles = [
+      createTile('tile_source', 'source', rotationSourceGrid()),
+      createTile('tile_target', 'target', rotationTargetGrid()),
+    ]
+
+    const candidates = getGenerationCandidates(tiles, null, sourceCell)
+
+    expect(candidates).toEqual([
+      expect.objectContaining({
+        tileId: 'tile_target',
+        rotation: 90,
+      }),
+    ])
+  })
+
+  it('records rotation on placed cells when a rotated match is required', () => {
+    const terrain = generateTerrain(
+      [
+        createTile('tile_source', 'source', rotationSourceGrid()),
+        createTile('tile_target', 'target', rotationTargetGrid()),
+      ],
+      { width: 2, height: 1, seed: 0 },
+    )
+
+    expect(terrain.cells[0][1]).toEqual(
+      expect.objectContaining({
+        tileId: 'tile_target',
+        rotation: 90,
+        status: 'placed',
+      }),
+    )
+  })
+
+  it('never places incompatible neighbors', () => {
+    const terrain = generateTerrain(
+      [
+        createTile('tile_a', 'A', uniformGrid('grass')),
+        createTile('tile_b', 'B', eastEdgeGrid('river', 'grass')),
+        createTile('tile_c', 'C', westEdgeGrid('river', 'grass')),
+      ],
+      { width: 8, height: 6, seed: 42 },
+    )
+
+    terrain.cells.forEach((row, y) => {
+      row.forEach((cell, x) => {
+        const cellView = getGeneratedCellView(
+          [
+            createTile('tile_a', 'A', uniformGrid('grass')),
+            createTile('tile_b', 'B', eastEdgeGrid('river', 'grass')),
+            createTile('tile_c', 'C', westEdgeGrid('river', 'grass')),
+          ],
+          cell,
+        )
+        if (!cellView) {
+          return
+        }
+
+        const eastNeighborView = getGeneratedCellView(
+          [
+            createTile('tile_a', 'A', uniformGrid('grass')),
+            createTile('tile_b', 'B', eastEdgeGrid('river', 'grass')),
+            createTile('tile_c', 'C', westEdgeGrid('river', 'grass')),
+          ],
+          terrain.cells[y][x + 1] ?? null,
+        )
+        const southNeighborView = getGeneratedCellView(
+          [
+            createTile('tile_a', 'A', uniformGrid('grass')),
+            createTile('tile_b', 'B', eastEdgeGrid('river', 'grass')),
+            createTile('tile_c', 'C', westEdgeGrid('river', 'grass')),
+          ],
+          terrain.cells[y + 1]?.[x] ?? null,
+        )
+
+        if (eastNeighborView) {
+          expect(cellView.view.borders.east).toEqual(eastNeighborView.view.borders.west)
+        }
+
+        if (southNeighborView) {
+          expect(cellView.view.borders.south).toEqual(southNeighborView.view.borders.north)
+        }
+      })
+    })
+  })
+
+  it('marks unsatisfied cells as empty and continues generation', () => {
+    const terrain = generateTerrain(
+      [
+        createTile('tile_only', 'only', eastEdgeGrid('river', 'grass')),
+        { ...createTile('tile_static', 'static', eastEdgeGrid('river', 'grass')), allowRotations: false },
+      ],
+      { width: 3, height: 1, seed: 0 },
+    )
+
+    expect(terrain.cells[0][2].status).toBe('empty')
+  })
+
+  it('is deterministic for the same seed and changes when the seed changes', () => {
+    const tiles = [
+      createTile('tile_a', 'A', uniformGrid('grass')),
+      createTile('tile_b', 'B', eastWestRiverGrid()),
+      createTile('tile_c', 'C', riverColumnGrid()),
+    ]
+
+    const first = generateTerrain(tiles, { width: 10, height: 10, seed: 99 })
+    const second = generateTerrain(tiles, { width: 10, height: 10, seed: 99 })
+    const third = generateTerrain(tiles, { width: 10, height: 10, seed: 100 })
+
+    expect(second).toEqual(first)
+    expect(third).not.toEqual(first)
+  })
+
+  it('returns rotated semantic grids for placed generated cells', () => {
+    const terrain = generateTerrain(
+      [
+        createTile('tile_source', 'source', rotationSourceGrid()),
+        createTile('tile_target', 'target', rotationTargetGrid()),
+      ],
+      { width: 2, height: 1, seed: 0 },
+    )
+
+    const rotatedCellView = getGeneratedCellView(
+      [
+        createTile('tile_source', 'source', rotationSourceGrid()),
+        createTile('tile_target', 'target', rotationTargetGrid()),
+      ],
+      terrain.cells[0][1],
+    )
+
+    expect(rotatedCellView?.view.rotation).toBe(90)
+    expect(rotatedCellView?.view.rotatedGrid[5]).toEqual(['f', 'fill', 'fill', 'fill', 'fill', 'fill'])
+  })
+
+  it('generates a 30x30 preview quickly enough for MVP use', () => {
+    const startedAt = Date.now()
+
+    generateTerrain(
+      [
+        createTile('tile_a', 'A', uniformGrid('grass')),
+        createTile('tile_b', 'B', eastWestRiverGrid()),
+        createTile('tile_c', 'C', riverColumnGrid()),
+      ],
+      { width: 30, height: 30, seed: 7 },
+    )
+
+    expect(Date.now() - startedAt).toBeLessThan(1000)
   })
 })
 
@@ -729,5 +934,50 @@ describe('Stage 1 editor UI', () => {
 
     expect(useProjectStore.getState().project.tiles[0].grid[0][0]).toBe(labelIdsByName.A)
     expect(useProjectStore.getState().project.tiles[0].grid[5][0]).toBe(labelIdsByName.A)
-  })
+  }, 10000)
+
+  it('generates terrain from preview controls and shows generated tile inspection details', async () => {
+    const user = userEvent.setup()
+
+    const project = createDefaultProject()
+    project.cellLabels = [
+      { id: 'grass', name: 'Grass', color: '#5fbf5f' },
+      { id: 'river', name: 'River', color: '#4aa3ff' },
+      { id: 'fill', name: 'Fill', color: '#7d8f93' },
+      { id: 'a', name: 'A', color: '#ff0000' },
+      { id: 'b', name: 'B', color: '#ff8800' },
+      { id: 'c', name: 'C', color: '#ffee00' },
+      { id: 'd', name: 'D', color: '#00aa44' },
+      { id: 'e', name: 'E', color: '#3399ff' },
+      { id: 'f', name: 'F', color: '#8844ff' },
+      { id: 'x', name: 'X', color: '#333333' },
+    ]
+    project.tiles = [
+      createTile('tile_source', 'River Source', rotationSourceGrid()),
+      createTile('tile_target', 'River Bank', rotationTargetGrid()),
+    ]
+    project.settings.generationWidth = 2
+    project.settings.generationHeight = 1
+    project.settings.generationSeed = 0
+
+    useProjectStore.getState().replaceProject(project)
+
+    render(<App />)
+
+    await user.clear(screen.getByRole('spinbutton', { name: /generation width/i }))
+    await user.type(screen.getByRole('spinbutton', { name: /generation width/i }), '2')
+    await user.clear(screen.getByRole('spinbutton', { name: /generation height/i }))
+    await user.type(screen.getByRole('spinbutton', { name: /generation height/i }), '1')
+    await user.clear(screen.getByRole('spinbutton', { name: /generation seed/i }))
+    await user.type(screen.getByRole('spinbutton', { name: /generation seed/i }), '0')
+
+    await user.click(screen.getByRole('button', { name: /^generate$/i }))
+    await user.click(screen.getByRole('gridcell', { name: /generated cell 1,0 placed/i }))
+
+    const generatedDetails = screen.getByText(/generated tile details/i).closest('.inspector-block')
+    expect(generatedDetails).not.toBeNull()
+    expect(within(generatedDetails as HTMLElement).getByText(/river bank/i)).toBeInTheDocument()
+    expect(within(generatedDetails as HTMLElement).getByText(/rotation:/i)).toBeInTheDocument()
+    expect(within(generatedDetails as HTMLElement).getByText(/west:/i)).toBeInTheDocument()
+  }, 10000)
 })

@@ -1,4 +1,5 @@
 import { LibraryPanel } from './LibraryPanel'
+import { TerrainPreviewPanel } from './TerrainPreviewPanel'
 import { TileEditorGrid } from './TileEditorGrid'
 import { TileInspector } from './TileInspector'
 
@@ -9,7 +10,10 @@ export function EditorLayout() {
         <LibraryPanel />
       </aside>
       <section className="editor-shell__center">
-        <TileEditorGrid />
+        <div className="editor-shell__center-stack">
+          <TileEditorGrid />
+          <TerrainPreviewPanel />
+        </div>
       </section>
       <aside className="editor-shell__right">
         <TileInspector />

@@ -103,6 +103,23 @@ export type CompatibilityGraph = {
   byTileId: Record<string, TileCompatibility>
 }
 
+export type GeneratedCellStatus = 'placed' | 'empty' | 'invalid'
+
+export type GeneratedCell = {
+  x: number
+  y: number
+  tileId: string | null
+  rotation: TileRotation
+  status: GeneratedCellStatus
+}
+
+export type GeneratedTerrain = {
+  width: number
+  height: number
+  seed: number | null
+  cells: GeneratedCell[][]
+}
+
 export type ValidationIssue = {
   id: string
   severity: 'error' | 'warning' | 'info'

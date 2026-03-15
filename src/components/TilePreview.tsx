@@ -5,7 +5,7 @@ type TilePreviewProps = {
   tile: Tile
   labels: CellLabel[]
   grid?: TileGrid
-  size?: 'tiny' | 'small' | 'large'
+  size?: 'tiny' | 'small' | 'medium' | 'large'
   ariaLabel?: string
 }
 

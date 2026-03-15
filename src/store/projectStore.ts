@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware'
 import type {
   CellLabel,
   CompatibilityGraph,
+  GeneratedTerrain,
   Project,
   Tile,
   TileCompatibility,
@@ -18,6 +19,7 @@ import {
   createEmptyTileCompatibility,
   deriveTileBorders,
 } from '../utils/compatibility'
+import { generateTerrain } from '../utils/terrainGeneration'
 
 const STORAGE_KEY = 'tileset-drafting-tool.stage-1.project'
 
@@ -150,6 +152,8 @@ type ProjectStoreState = {
   project: Project
   selectedTileId: string | null
   selectedLabelId: string | null
+  generatedTerrain: GeneratedTerrain | null
+  selectedGeneratedCell: { x: number; y: number } | null
   validationIssues: ValidationIssue[]
 }
 
@@ -169,6 +173,10 @@ type ProjectStoreActions = {
   getTileBorders: (tileId: string) => TileBorders | null
   getCompatibilityGraph: () => CompatibilityGraph
   getCompatibilityForTile: (tileId: string) => TileCompatibility
+  updateGenerationSettings: (updates: Partial<Pick<Project['settings'], 'generationWidth' | 'generationHeight' | 'generationSeed'>>) => void
+  generateTerrainPreview: () => void
+  selectGeneratedCell: (selection: { x: number; y: number } | null) => void
+  getSelectedGeneratedTerrainCell: () => GeneratedTerrain['cells'][number][number] | null
   getValidationIssues: () => ValidationIssue[]
   replaceProject: (project: Project) => void
   resetProject: () => void
@@ -201,7 +209,16 @@ const createInitialState = (): ProjectStoreState => ({
   ...withValidation(createDefaultProject()),
   selectedTileId: null,
   selectedLabelId: null,
+  generatedTerrain: null,
+  selectedGeneratedCell: null,
 })
+
+const createGeneratedTerrain = (project: Project) =>
+  generateTerrain(project.tiles, {
+    width: project.settings.generationWidth,
+    height: project.settings.generationHeight,
+    seed: project.settings.generationSeed,
+  })
 
 export const useProjectStore = create<ProjectStore>()(
   persist(
@@ -219,6 +236,7 @@ export const useProjectStore = create<ProjectStore>()(
         set({
           ...withValidation(nextProject),
           selectedTileId: tile.id,
+          generatedTerrain: createGeneratedTerrain(nextProject),
         })
 
         return tile.id
@@ -256,6 +274,7 @@ export const useProjectStore = create<ProjectStore>()(
         set({
           ...withValidation(nextProject),
           selectedTileId: duplicate.id,
+          generatedTerrain: createGeneratedTerrain(nextProject),
         })
 
         return duplicate.id
@@ -272,6 +291,7 @@ export const useProjectStore = create<ProjectStore>()(
         set({
           ...withValidation(nextProject),
           selectedTileId: getNextSelectedTileId(nextTiles, state.selectedTileId === tileId ? null : state.selectedTileId),
+          generatedTerrain: createGeneratedTerrain(nextProject),
         })
       },
 
@@ -384,6 +404,38 @@ export const useProjectStore = create<ProjectStore>()(
 
       getCompatibilityForTile: (tileId) => get().getCompatibilityGraph().byTileId[tileId] ?? createEmptyTileCompatibility(),
 
+      updateGenerationSettings: (updates) => {
+        const { project } = get()
+        const nextProject = {
+          ...project,
+          settings: {
+            ...project.settings,
+            ...updates,
+          },
+        }
+
+        set(withValidation(nextProject))
+      },
+
+      generateTerrainPreview: () => {
+        const { project } = get()
+        set({
+          generatedTerrain: createGeneratedTerrain(project),
+          selectedGeneratedCell: null,
+        })
+      },
+
+      selectGeneratedCell: (selection) => set({ selectedGeneratedCell: selection }),
+
+      getSelectedGeneratedTerrainCell: () => {
+        const { generatedTerrain, selectedGeneratedCell } = get()
+        if (!generatedTerrain || !selectedGeneratedCell) {
+          return null
+        }
+
+        return generatedTerrain.cells[selectedGeneratedCell.y]?.[selectedGeneratedCell.x] ?? null
+      },
+
       getValidationIssues: () => get().validationIssues,
 
       replaceProject: (project) =>
@@ -391,6 +443,8 @@ export const useProjectStore = create<ProjectStore>()(
           ...withValidation(project),
           selectedTileId: getNextSelectedTileId(project.tiles, get().selectedTileId),
           selectedLabelId: getNextSelectedLabelId(project.cellLabels, get().selectedLabelId),
+          generatedTerrain: createGeneratedTerrain(project),
+          selectedGeneratedCell: null,
         }),
 
       resetProject: () => set(createInitialState()),
@@ -409,6 +463,8 @@ export const useProjectStore = create<ProjectStore>()(
           ...withValidation(persistedProject),
           selectedTileId: getNextSelectedTileId(persistedProject.tiles),
           selectedLabelId: getNextSelectedLabelId(persistedProject.cellLabels),
+          generatedTerrain: createGeneratedTerrain(persistedProject),
+          selectedGeneratedCell: null,
         }
       },
     },
