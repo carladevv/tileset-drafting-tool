@@ -30,24 +30,76 @@ This is the foundation for everything else. If this stage feels good, the rest o
 
 ---
 
-## Stage 2 — Compatibility Authoring and Auto-Suggestions
+## Stage 2 — Edge Rule System and Computed Compatibility
 
 ### Goal
-Add the compatibility layer:
-- compatibility data between tile sides
-- manual connect/disconnect UI
-- auto-suggestions based on side tags
-- reciprocal connection checks
-- warnings for sides with no matches
+Turn per-side metadata into automatically computed compatibility results.
+
+This stage introduces:
+- a formal edge metadata model
+- compatibility computation derived from side definitions
+- rotation-aware matching
+- compatibility previews per tile side
+- warnings for missing or invalid edge definitions
+
+Connections are NOT manually authored.  
+Compatibility must be computed deterministically from side metadata.
+
+### Functionality added
+- define structured metadata for each tile side
+- compute compatible sides across all tiles
+- recompute compatibility whenever side metadata changes
+- display compatibility results in the tile inspector
+- detect and warn about sides with zero valid matches
+- support optional rotation matching for tiles
+
+### Edge metadata model (MVP)
+Each side has the following fields:
+
+edgeType: string  
+variant: string | null  
+height: number | null  
+symmetry: "symmetric" | "complementary"
+
+Compatibility rules:
+
+symmetric rule
+- edgeType must match
+- variant must match or be null-compatible
+- height must match
+
+complementary rule
+- edgeType must match
+- variant must be complementary (example: inner ↔ outer)
+- height must match
+
+### UI additions
+
+Tile inspector must now show:
+
+For each side:
+- side metadata fields
+- computed list of compatible tiles
+- number of valid matches
+- warning indicators if matches are zero
+
+Compatibility results should include:
+
+- tile name
+- matching side
+- rotation (if applicable)
+
+Non-matching tiles should be visually de-emphasized.
 
 ### Testable aspects
-- connecting A:east to B:west creates the expected data entry
-- reciprocal rules are handled correctly
-- tag-based suggestions are deterministic
-- incompatible sides are visibly de-emphasized
-- warnings appear for isolated or one-way connections
-- connection list updates immediately after edits
-
+- assigning side metadata produces deterministic compatibility results
+- changing side metadata recomputes compatibility immediately
+- symmetric edges match correctly
+- complementary edges match correctly
+- height mismatches prevent compatibility
+- rotated tiles appear as valid matches when rotations are enabled
+- sides with zero valid matches show warnings
+- compatibility results remain stable across reloads
 ---
 
 ## Stage 3 — Terrain Preview in Sketch Mode

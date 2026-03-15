@@ -1,0 +1,326 @@
+.appShell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(420px, 1.2fr) minmax(280px, 360px);
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
+  padding: 1rem;
+  border: 2px solid #334155;
+  background:
+    linear-gradient(180deg, rgba(14, 22, 39, 0.95), rgba(10, 15, 28, 0.94)),
+    repeating-linear-gradient(0deg, rgba(148, 163, 184, 0.06), rgba(148, 163, 184, 0.06) 1px, transparent 1px, transparent 6px);
+  border-radius: 18px;
+  box-shadow: 0 16px 40px rgba(2, 6, 23, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.panelHeader,
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.eyebrow,
+.sectionLabel {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #fbbf24;
+}
+
+.title,
+.sectionTitle,
+.previewTitle {
+  margin: 0.25rem 0 0;
+  font-family: "Trebuchet MS", "Verdana", sans-serif;
+  font-size: clamp(1.2rem, 2vw, 1.75rem);
+  letter-spacing: 0.04em;
+  color: #f8fafc;
+}
+
+.previewTitle {
+  font-size: 1rem;
+}
+
+.tileList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.tileRow {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #243244;
+  background: rgba(15, 23, 42, 0.85);
+  color: inherit;
+  text-align: left;
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.tileRowSelected {
+  border-color: #f97316;
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.45);
+}
+
+.tileThumb,
+.previewCanvas,
+.editorCanvas {
+  border: 2px solid #475569;
+  background:
+    linear-gradient(45deg, rgba(71, 85, 105, 0.45) 25%, transparent 25%, transparent 75%, rgba(71, 85, 105, 0.45) 75%),
+    linear-gradient(45deg, rgba(71, 85, 105, 0.45) 25%, transparent 25%, transparent 75%, rgba(71, 85, 105, 0.45) 75%);
+  background-position: 0 0, 6px 6px;
+  background-size: 12px 12px;
+  border-radius: 10px;
+}
+
+.tileMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.tileName {
+  font-weight: 700;
+  color: #f8fafc;
+  overflow-wrap: anywhere;
+}
+
+.warningBadge,
+.completeBadge,
+.pixelStat,
+.inspectorStatusWarning,
+.inspectorStatusReady {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: fit-content;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+.warningBadge,
+.inspectorStatusWarning {
+  background: rgba(249, 115, 22, 0.16);
+  color: #fdba74;
+}
+
+.completeBadge,
+.inspectorStatusReady {
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+}
+
+.pixelStat {
+  background: rgba(59, 130, 246, 0.14);
+  color: #93c5fd;
+}
+
+.tileActions,
+.actionRow,
+.toolGroup,
+.paletteRow,
+.toolbar {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.toolbar {
+  flex-direction: column;
+}
+
+.iconButton,
+.primaryButton,
+.secondaryButton,
+.toolButton,
+.paletteSwatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 2px solid #475569;
+  border-radius: 12px;
+  color: #f8fafc;
+  cursor: pointer;
+}
+
+.iconButton,
+.paletteSwatch {
+  width: 2.35rem;
+  height: 2.35rem;
+}
+
+.primaryButton,
+.secondaryButton,
+.toolButton {
+  min-height: 2.6rem;
+  padding: 0.55rem 0.9rem;
+  background: #172033;
+  font-weight: 700;
+}
+
+.primaryButton {
+  border-color: #f97316;
+  background: linear-gradient(180deg, #fb923c, #ea580c);
+  color: #111827;
+}
+
+.secondaryButton,
+.toolButton {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.94), rgba(15, 23, 42, 0.94));
+}
+
+.toolButtonActive,
+.paletteSwatchActive {
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.35);
+}
+
+.paletteSwatch {
+  padding: 0;
+}
+
+.fieldStack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: #cbd5e1;
+}
+
+.textInput {
+  width: 100%;
+  min-height: 2.65rem;
+  padding: 0.7rem 0.8rem;
+  border: 2px solid #334155;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #f8fafc;
+}
+
+.inlineWarning {
+  margin: -0.35rem 0 0;
+  color: #fdba74;
+  font-size: 0.9rem;
+}
+
+.editorCanvasFrame {
+  position: relative;
+  width: min(100%, 512px);
+  aspect-ratio: 1;
+  border: 3px solid #f97316;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.16);
+}
+
+.editorCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.editorGridOverlay {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(248, 250, 252, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(248, 250, 252, 0.06) 1px, transparent 1px);
+  background-size: calc(100% / 8) calc(100% / 8);
+  pointer-events: none;
+}
+
+.editorLabel {
+  position: absolute;
+  left: 0.6rem;
+  bottom: 0.6rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #e2e8f0;
+  font-size: 0.75rem;
+}
+
+.previewCard,
+.metadataCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 2px solid #334155;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.sideGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.sideCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 2px solid #334155;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.82);
+}
+
+.sideHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  color: #f8fafc;
+}
+
+.statusMissing {
+  color: #fdba74;
+}
+
+.statusAssigned {
+  color: #86efac;
+}
+
+.metadataBlock {
+  margin: 0;
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: #020617;
+  color: #93c5fd;
+  font-size: 0.84rem;
+  overflow: auto;
+}
+
+@media (max-width: 1180px) {
+  .appShell {
+    grid-template-columns: 1fr;
+  }
+
+  .editorCanvasFrame {
+    width: min(100%, 100vw - 4rem);
+  }
+}
