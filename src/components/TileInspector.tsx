@@ -1,12 +1,19 @@
 import { useProjectStore } from '../store/projectStore'
+import { tileSides } from '../utils/compatibility'
 
 export function TileInspector() {
   const tiles = useProjectStore((state) => state.project.tiles)
   const selectedTileId = useProjectStore((state) => state.selectedTileId)
   const validationIssues = useProjectStore((state) => state.validationIssues)
   const updateTileName = useProjectStore((state) => state.updateTileName)
+  const getTileBorders = useProjectStore((state) => state.getTileBorders)
+  const getCompatibilityForTile = useProjectStore((state) => state.getCompatibilityForTile)
   const tile = tiles.find((entry) => entry.id === selectedTileId) ?? null
   const issues = validationIssues.filter((issue) => issue.tileId === selectedTileId)
+  const borders = selectedTileId ? getTileBorders(selectedTileId) : null
+  const compatibility = selectedTileId ? getCompatibilityForTile(selectedTileId) : null
+
+  const getTileName = (tileId: string) => tiles.find((entry) => entry.id === tileId)?.name || 'Untitled tile'
 
   return (
     <section className="panel">
@@ -39,6 +46,40 @@ export function TileInspector() {
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+            <div className="inspector-block">
+              <h3>Compatibility</h3>
+              {!borders || !compatibility ? (
+                <p className="empty-copy">No compatibility data yet.</p>
+              ) : (
+                <div className="compatibility-list">
+                  {tileSides.map((side) => {
+                    const matches = compatibility[side]
+                    const noMatches = matches.length === 0
+
+                    return (
+                      <section key={side} className="compatibility-side">
+                        <header className="compatibility-side__header">
+                          <h4>{side}</h4>
+                          <span>Matches: {matches.length}</span>
+                        </header>
+                        <p className="compatibility-side__border">[{borders[side].join(', ')}]</p>
+                        {noMatches ? (
+                          <p className="compatibility-side__warning">Warning: no compatible tiles</p>
+                        ) : (
+                          <ul className="compatibility-side__matches">
+                            {matches.map((match) => (
+                              <li key={`${match.sourceTileId}_${match.sourceSide}_${match.targetTileId}_${match.targetSide}`}>
+                                {getTileName(match.targetTileId)} {match.targetSide}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </section>
+                    )
+                  })}
+                </div>
               )}
             </div>
           </>

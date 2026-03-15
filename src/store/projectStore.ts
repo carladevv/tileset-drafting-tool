@@ -1,8 +1,23 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-import type { CellLabel, Project, Tile, TileGrid, ValidationIssue } from '../types/projectTypes'
+import type {
+  CellLabel,
+  CompatibilityGraph,
+  Project,
+  Tile,
+  TileCompatibility,
+  TileGrid,
+  TileBorders,
+  ValidationIssue,
+} from '../types/projectTypes'
 import { GRID_SIZE } from '../types/projectTypes'
+import {
+  computeCompatibilityGraph,
+  computeCompatibilityWarnings,
+  createEmptyTileCompatibility,
+  deriveTileBorders,
+} from '../utils/compatibility'
 
 const STORAGE_KEY = 'tileset-drafting-tool.stage-1.project'
 
@@ -49,6 +64,7 @@ export const validateProject = (project: Project): ValidationIssue[] => {
   const issues: ValidationIssue[] = []
   const labelIds = new Set(project.cellLabels.map((label) => label.id))
   const nameCounts = new Map<string, number>()
+  const compatibilityGraph = computeCompatibilityGraph(project.tiles)
 
   for (const tile of project.tiles) {
     const trimmedName = tile.name.trim()
@@ -107,7 +123,7 @@ export const validateProject = (project: Project): ValidationIssue[] => {
     }
   }
 
-  return issues
+  return [...issues, ...computeCompatibilityWarnings(project, compatibilityGraph, createValidationIssue)]
 }
 
 const createTileName = (tiles: Tile[]) => `tile_${tiles.length + 1}`
@@ -150,6 +166,10 @@ type ProjectStoreActions = {
   selectLabel: (labelId: string | null) => void
   paintCell: (tileId: string, row: number, column: number, labelId: string) => void
   paintCells: (tileId: string, cells: Array<{ row: number; column: number }>, labelId: string) => void
+  getTileBorders: (tileId: string) => TileBorders | null
+  getCompatibilityGraph: () => CompatibilityGraph
+  getCompatibilityForTile: (tileId: string) => TileCompatibility
+  getValidationIssues: () => ValidationIssue[]
   replaceProject: (project: Project) => void
   resetProject: () => void
 }
@@ -354,6 +374,17 @@ export const useProjectStore = create<ProjectStore>()(
 
         set(withValidation(nextProject))
       },
+
+      getTileBorders: (tileId) => {
+        const tile = get().project.tiles.find((entry) => entry.id === tileId)
+        return tile ? deriveTileBorders(tile.grid) : null
+      },
+
+      getCompatibilityGraph: () => computeCompatibilityGraph(get().project.tiles),
+
+      getCompatibilityForTile: (tileId) => get().getCompatibilityGraph().byTileId[tileId] ?? createEmptyTileCompatibility(),
+
+      getValidationIssues: () => get().validationIssues,
 
       replaceProject: (project) =>
         set({

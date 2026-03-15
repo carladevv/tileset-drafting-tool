@@ -4,6 +4,8 @@ export type CellLabelId = string
 
 export type TileGrid = CellLabelId[][]
 
+export type TileSide = 'north' | 'east' | 'south' | 'west'
+
 export type PreviewMode = 'semantic' | 'image'
 
 export type CellDetailBehavior = {
@@ -62,6 +64,34 @@ export type Project = {
   cellLabels: CellLabel[]
   tiles: Tile[]
   settings: ProjectSettings
+}
+
+export type BorderArray = CellLabelId[]
+
+export type TileBorders = {
+  north: BorderArray
+  east: BorderArray
+  south: BorderArray
+  west: BorderArray
+}
+
+export type CompatibilityMatch = {
+  sourceTileId: string
+  sourceSide: TileSide
+  targetTileId: string
+  targetSide: TileSide
+  targetRotation: 0 | 90 | 180 | 270
+}
+
+export type TileCompatibility = {
+  north: CompatibilityMatch[]
+  east: CompatibilityMatch[]
+  south: CompatibilityMatch[]
+  west: CompatibilityMatch[]
+}
+
+export type CompatibilityGraph = {
+  byTileId: Record<string, TileCompatibility>
 }
 
 export type ValidationIssue = {
