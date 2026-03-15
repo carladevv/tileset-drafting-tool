@@ -99,6 +99,14 @@ Filtered by compatibility rules.
 
 Selection may be random using the generation seed.
 
+Each tile also carries a generation weight from `0` to `100`:
+
+-   `0` excludes the tile from preview generation
+-   `1` is the default baseline likelihood
+-   higher values bias compatible selection proportionally
+-   `100` makes a compatible tile one hundred times as likely as a `1`
+    tile
+
 ------------------------------------------------------------------------
 
 ## Handling Unsatisfied Cells

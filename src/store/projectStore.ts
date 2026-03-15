@@ -20,6 +20,7 @@ import {
   deriveTileBorders,
 } from '../utils/compatibility'
 import { generateTerrain } from '../utils/terrainGeneration'
+import { DEFAULT_TILE_WEIGHT, normalizeTileWeight } from '../utils/tileWeights'
 
 const STORAGE_KEY = 'tileset-drafting-tool.stage-1.project'
 
@@ -60,6 +61,16 @@ export const createDefaultProject = (): Project => ({
 const createValidationIssue = (issue: Omit<ValidationIssue, 'id'>): ValidationIssue => ({
   id: createId('issue'),
   ...issue,
+})
+
+const normalizeTile = (tile: Tile): Tile => ({
+  ...tile,
+  weight: normalizeTileWeight(tile.weight),
+})
+
+const normalizeProject = (project: Project): Project => ({
+  ...project,
+  tiles: project.tiles.map(normalizeTile),
 })
 
 export const validateProject = (project: Project): ValidationIssue[] => {
@@ -136,6 +147,7 @@ const createDefaultTile = (tiles: Tile[]): Tile => ({
   name: createTileName(tiles),
   grid: createEmptyGrid(),
   allowRotations: true,
+  weight: DEFAULT_TILE_WEIGHT,
 })
 
 const createDefaultLabel = (labels: CellLabel[]): CellLabel => {
@@ -160,6 +172,7 @@ type ProjectStoreState = {
 type ProjectStoreActions = {
   createTile: () => string
   updateTileName: (tileId: string, name: string) => void
+  updateTileWeight: (tileId: string, weight: number) => void
   duplicateTile: (tileId: string) => string | null
   deleteTile: (tileId: string) => void
   selectTile: (tileId: string | null) => void
@@ -184,10 +197,14 @@ type ProjectStoreActions = {
 
 export type ProjectStore = ProjectStoreState & ProjectStoreActions
 
-const withValidation = (project: Project) => ({
-  project,
-  validationIssues: validateProject(project),
-})
+const withValidation = (project: Project) => {
+  const normalizedProject = normalizeProject(project)
+
+  return {
+    project: normalizedProject,
+    validationIssues: validateProject(normalizedProject),
+  }
+}
 
 const getNextSelectedTileId = (tiles: Tile[], preferredTileId?: string | null) => {
   if (preferredTileId && tiles.some((tile) => tile.id === preferredTileId)) {
@@ -213,12 +230,15 @@ const createInitialState = (): ProjectStoreState => ({
   selectedGeneratedCell: null,
 })
 
-const createGeneratedTerrain = (project: Project) =>
-  generateTerrain(project.tiles, {
+const createGeneratedTerrain = (project: Project) => {
+  const normalizedProject = normalizeProject(project)
+
+  return generateTerrain(normalizedProject.tiles, {
     width: project.settings.generationWidth,
     height: project.settings.generationHeight,
     seed: project.settings.generationSeed,
   })
+}
 
 export const useProjectStore = create<ProjectStore>()(
   persist(
@@ -250,6 +270,22 @@ export const useProjectStore = create<ProjectStore>()(
         }
 
         set(withValidation(nextProject))
+      },
+
+      updateTileWeight: (tileId, weight) => {
+        const { project, generatedTerrain } = get()
+        const nextProject = {
+          ...project,
+          tiles: project.tiles.map((tile) =>
+            tile.id === tileId ? { ...tile, weight: normalizeTileWeight(weight) } : tile,
+          ),
+        }
+
+        set({
+          ...withValidation(nextProject),
+          generatedTerrain: generatedTerrain ? createGeneratedTerrain(nextProject) : generatedTerrain,
+          selectedGeneratedCell: null,
+        })
       },
 
       duplicateTile: (tileId) => {

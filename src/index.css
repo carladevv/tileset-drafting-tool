@@ -404,6 +404,71 @@ input:not([type]),
   padding: 0;
 }
 
+.slider-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slider-field__reset {
+  min-width: 68px;
+  flex: 0 0 auto;
+}
+
+.slider-field__input {
+  appearance: none;
+  min-height: auto;
+  height: 10px;
+  padding: 0;
+  flex: 1 1 auto;
+  border: 1px solid #1b2629;
+  background: linear-gradient(180deg, #5a7d84 0%, #425d63 100%);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.slider-field__input::-webkit-slider-runnable-track {
+  height: 8px;
+  border: 0;
+  background: linear-gradient(180deg, #5a7d84 0%, #425d63 100%);
+}
+
+.slider-field__input::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 22px;
+  margin-top: -7px;
+  border: 1px solid #1b2629;
+  background: linear-gradient(180deg, #ffcf7d 0%, #ffb454 100%);
+  box-shadow: 1px 1px 0 rgba(16, 24, 26, 0.45);
+}
+
+.slider-field__input::-moz-range-track {
+  height: 8px;
+  border: 0;
+  background: linear-gradient(180deg, #5a7d84 0%, #425d63 100%);
+}
+
+.slider-field__input::-moz-range-thumb {
+  width: 14px;
+  height: 22px;
+  border: 1px solid #1b2629;
+  border-radius: 0;
+  background: linear-gradient(180deg, #ffcf7d 0%, #ffb454 100%);
+  box-shadow: 1px 1px 0 rgba(16, 24, 26, 0.45);
+}
+
+.slider-field__input:focus-visible {
+  outline: 1px solid #ffb454;
+  outline-offset: 2px;
+}
+
+.slider-field__value {
+  min-width: 3ch;
+  text-align: right;
+  font-size: 0.82rem;
+  color: #dfe9eb;
+}
+
 .checkbox-field {
   display: inline-flex;
   align-items: center;
@@ -713,6 +778,10 @@ input[type='color'] {
 
   .terrain-controls {
     grid-template-columns: 1fr;
+  }
+
+  .slider-field {
+    flex-wrap: wrap;
   }
 
   .tile-grid {

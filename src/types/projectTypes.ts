@@ -44,6 +44,7 @@ export type Tile = {
   name: string
   grid: TileGrid
   allowRotations: boolean
+  weight: number
   imageAsset?: TileImageAsset | null
   metadata?: TileMetadata
 }

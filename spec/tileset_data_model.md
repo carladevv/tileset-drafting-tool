@@ -155,6 +155,7 @@ type Tile = {
   grid: TileGrid;
 
   allowRotations: boolean;
+  weight: number;
 
   imageAsset?: TileImageAsset | null;
 
@@ -168,6 +169,10 @@ type Tile = {
 -   `imageAsset` is optional and only affects preview.
 -   `allowRotations` controls whether logical rotated variants are
     considered during compatibility/generation.
+-   `weight` biases terrain preview selection for this tile from `0` to
+    `100`.
+-   `weight: 0` excludes the tile from terrain preview generation.
+-   new tiles default to `weight: 1`.
 
 ------------------------------------------------------------------------
 

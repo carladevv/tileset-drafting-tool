@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { useProjectStore } from '../store/projectStore'
 import { getRotatedTileViews, tileSides } from '../utils/compatibility'
+import { DEFAULT_TILE_WEIGHT, MAX_TILE_WEIGHT, MIN_TILE_WEIGHT } from '../utils/tileWeights'
 import { TilePreview } from './TilePreview'
 
 export function TileInspector() {
@@ -11,6 +12,7 @@ export function TileInspector() {
   const selectedTileId = useProjectStore((state) => state.selectedTileId)
   const validationIssues = useProjectStore((state) => state.validationIssues)
   const updateTileName = useProjectStore((state) => state.updateTileName)
+  const updateTileWeight = useProjectStore((state) => state.updateTileWeight)
   const setTileRotationEnabled = useProjectStore((state) => state.setTileRotationEnabled)
   const getTileBorders = useProjectStore((state) => state.getTileBorders)
   const getCompatibilityForTile = useProjectStore((state) => state.getCompatibilityForTile)
@@ -65,6 +67,32 @@ export function TileInspector() {
                     onChange={(event) => updateTileName(tile.id, event.target.value)}
                   />
                 </label>
+                <div className="field-group">
+                  <span>Weight</span>
+                  <div className="slider-field">
+                    <button
+                      type="button"
+                      className="pixel-button slider-field__reset"
+                      onClick={() => updateTileWeight(tile.id, DEFAULT_TILE_WEIGHT)}
+                      disabled={tile.weight === DEFAULT_TILE_WEIGHT}
+                    >
+                      Reset
+                    </button>
+                    <input
+                      type="range"
+                      min={MIN_TILE_WEIGHT}
+                      max={MAX_TILE_WEIGHT}
+                      step={1}
+                      aria-label="Tile generation weight"
+                      className="slider-field__input"
+                      value={tile.weight}
+                      onChange={(event) => updateTileWeight(tile.id, Number(event.target.value))}
+                    />
+                    <output className="slider-field__value" aria-live="polite">
+                      {tile.weight}
+                    </output>
+                  </div>
+                </div>
                 <label className="field-group">
                   <span>Rotations</span>
                   <div className="checkbox-field">

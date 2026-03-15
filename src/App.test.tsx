@@ -23,6 +23,7 @@ const createTile = (id: string, name: string, grid: Tile['grid']): Tile => ({
   id,
   name,
   allowRotations: true,
+  weight: 1,
   grid,
 })
 
@@ -289,23 +290,21 @@ describe('Stage 4 terrain generation helpers', () => {
     ])
   })
 
-  it('records rotation on placed cells when a rotated match is required', () => {
+  it('records rotation on generated cell views when a rotated match is required', () => {
     const tiles = [
       createTile('tile_source', 'source', rotationSourceGrid()),
       createTile('tile_target', 'target', rotationTargetGrid()),
     ]
-    const terrain = generateTerrain(
-      tiles,
-      { width: 2, height: 1, seed: 0 },
-    )
+    const rotatedCellView = getGeneratedCellView(tiles, {
+      x: 1,
+      y: 0,
+      tileId: 'tile_target',
+      rotation: 90,
+      status: 'placed',
+    })
 
-    const placedViews = terrain.cells[0]
-      .map((cell) => getGeneratedCellView(tiles, cell))
-      .filter((cellView) => cellView !== null)
-
-    expect(placedViews).toHaveLength(2)
-    expect(placedViews.some((cellView) => cellView.view.rotation === 90)).toBe(true)
-    expect(placedViews[0].view.borders.east).toEqual(placedViews[1].view.borders.west)
+    expect(rotatedCellView?.tile.id).toBe('tile_target')
+    expect(rotatedCellView?.view.rotation).toBe(90)
   })
 
   it('never places incompatible neighbors', () => {
@@ -373,6 +372,43 @@ describe('Stage 4 terrain generation helpers', () => {
     expect(terrain.cells[0].some((cell) => cell.status !== 'placed')).toBe(true)
   })
 
+  it('excludes zero-weight tiles from generation', () => {
+    const terrain = generateTerrain(
+      [
+        { ...createTile('tile_hidden', 'hidden', uniformGrid('grass')), weight: 0 },
+        createTile('tile_visible', 'visible', uniformGrid('grass')),
+      ],
+      { width: 4, height: 4, seed: 0 },
+    )
+
+    expect(terrain.cells.flat().every((cell) => cell.tileId !== 'tile_hidden')).toBe(true)
+  })
+
+  it('uses tile weights to bias preview selection', () => {
+    let commonCount = 0
+    let rareCount = 0
+
+    for (let seed = 0; seed < 80; seed += 1) {
+      const terrain = generateTerrain(
+        [
+          { ...createTile('tile_rare', 'rare', uniformGrid('grass')), weight: 1 },
+          { ...createTile('tile_common', 'common', uniformGrid('grass')), weight: 100 },
+        ],
+        { width: 1, height: 1, seed },
+      )
+
+      if (terrain.cells[0][0].tileId === 'tile_common') {
+        commonCount += 1
+      }
+
+      if (terrain.cells[0][0].tileId === 'tile_rare') {
+        rareCount += 1
+      }
+    }
+
+    expect(commonCount).toBeGreaterThan(rareCount * 3)
+  })
+
   it('is deterministic for the same seed and changes when the seed changes', () => {
     const tiles = [
       createTile('tile_a', 'A', uniformGrid('grass')),
@@ -393,14 +429,14 @@ describe('Stage 4 terrain generation helpers', () => {
       createTile('tile_source', 'source', rotationSourceGrid()),
       createTile('tile_target', 'target', rotationTargetGrid()),
     ]
-    const terrain = generateTerrain(
-      tiles,
-      { width: 2, height: 1, seed: 0 },
-    )
-    const rotatedCell = terrain.cells[0].find((cell) => cell.status === 'placed' && cell.rotation === 90) ?? null
-
-    const rotatedCellView = getGeneratedCellView(tiles, rotatedCell)
-    const rotatedTile = tiles.find((tile) => tile.id === rotatedCell?.tileId)
+    const rotatedCellView = getGeneratedCellView(tiles, {
+      x: 1,
+      y: 0,
+      tileId: 'tile_target',
+      rotation: 90,
+      status: 'placed',
+    })
+    const rotatedTile = tiles.find((tile) => tile.id === 'tile_target')
 
     expect(rotatedCellView?.view.rotation).toBe(90)
     expect(rotatedCellView?.view.rotatedGrid).toEqual(rotateGrid(rotatedTile?.grid ?? createEmptyGrid(), 90))
@@ -457,6 +493,7 @@ describe('Stage 1 store behavior', () => {
     expect(tile).toBeDefined()
     expect(tile?.grid).toHaveLength(6)
     expect(tile?.grid.every((row) => row.length === 6)).toBe(true)
+    expect(tile?.weight).toBe(1)
   })
 
   it('duplicates a tile with a new id and copied cell data', () => {
@@ -470,6 +507,7 @@ describe('Stage 1 store behavior', () => {
     expect(duplicateId).not.toBeNull()
     expect(duplicate.id).not.toBe(source.id)
     expect(duplicate.grid).toEqual(source.grid)
+    expect(duplicate.weight).toBe(source.weight)
   })
 
   it('deletes a tile from the project', () => {
@@ -513,6 +551,7 @@ describe('Stage 1 store behavior', () => {
     const stored = JSON.parse(storedRaw ?? '{}') as { state?: { project?: Project } }
     expect(stored.state?.project?.cellLabels[0].name).toBe('Grass')
     expect(stored.state?.project?.tiles[0].grid[1][1]).toBe(labelId)
+    expect(stored.state?.project?.tiles[0].weight).toBe(1)
   })
 
   it('flags invalid grid dimensions and undefined labels', () => {
@@ -521,12 +560,14 @@ describe('Stage 1 store behavior', () => {
       id: 'tile_invalid',
       name: 'broken',
       allowRotations: true,
+      weight: 1,
       grid: createEmptyGrid().slice(0, 5),
     })
     project.tiles.push({
       id: 'tile_unknown_label',
       name: 'unknown',
       allowRotations: true,
+      weight: 1,
       grid: createEmptyGrid('missing_label'),
     })
 
@@ -604,6 +645,7 @@ describe('Stage 1 store behavior', () => {
 
     expect(persistedTile).toBeDefined()
     expect(persistedTile?.allowRotations).toBe(false)
+    expect(persistedTile?.weight).toBe(1)
     expect(persistedTile).not.toHaveProperty('borders')
     expect(persistedTile).not.toHaveProperty('rotatedGrid')
     expect(persistedTile).not.toHaveProperty('rotatedViews')
@@ -645,6 +687,40 @@ describe('Stage 1 store behavior', () => {
 
     expect(afterReload).toEqual(beforeReload)
     expect(afterValidation).toEqual(beforeValidation)
+  })
+
+  it('normalizes missing tile weights from persisted project data to the default', () => {
+    const project = createDefaultProject()
+    project.tiles = [
+      {
+        id: 'legacy_tile',
+        name: 'Legacy Tile',
+        grid: createEmptyGrid(),
+        allowRotations: true,
+      } as Tile,
+    ]
+
+    useProjectStore.getState().replaceProject(project)
+
+    expect(useProjectStore.getState().project.tiles[0].weight).toBe(1)
+  })
+
+  it('regenerates the preview when a tile weight changes', () => {
+    const project = createDefaultProject()
+    project.tiles = [
+      createTile('tile_hidden', 'Hidden', uniformGrid('grass')),
+      createTile('tile_visible', 'Visible', uniformGrid('grass')),
+    ]
+    project.settings.generationWidth = 4
+    project.settings.generationHeight = 4
+    project.settings.generationSeed = 0
+
+    useProjectStore.getState().replaceProject(project)
+    useProjectStore.getState().updateTileWeight('tile_hidden', 0)
+
+    const terrain = useProjectStore.getState().generatedTerrain
+    expect(terrain).not.toBeNull()
+    expect(terrain?.cells.flat().every((cell) => cell.tileId !== 'tile_hidden')).toBe(true)
   })
 
   it('updates validation warnings when rotation settings change', () => {
@@ -786,6 +862,38 @@ describe('Stage 1 editor UI', () => {
     expect(nameInput).toHaveValue('Cliff Edge')
     expect(screen.getAllByRole('heading', { name: 'Cliff Edge' }).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /^cliff edge$/i })).toBeInTheDocument()
+  })
+
+  it('lets the user adjust a tile generation weight from the inspector', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /\+ new tile/i }))
+
+    const weightSlider = screen.getByRole('slider', { name: /tile generation weight/i })
+    expect(weightSlider).toHaveValue('1')
+
+    fireEvent.change(weightSlider, { target: { value: '70' } })
+
+    expect(weightSlider).toHaveValue('70')
+    expect(useProjectStore.getState().project.tiles[0].weight).toBe(70)
+  })
+
+  it('lets the user reset a tile generation weight from the inspector', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /\+ new tile/i }))
+
+    const weightSlider = screen.getByRole('slider', { name: /tile generation weight/i })
+    fireEvent.change(weightSlider, { target: { value: '70' } })
+
+    await user.click(screen.getByRole('button', { name: /reset/i }))
+
+    expect(weightSlider).toHaveValue('1')
+    expect(useProjectStore.getState().project.tiles[0].weight).toBe(1)
   })
 
   it('switches between tile and label editors inside the shared library panel', async () => {

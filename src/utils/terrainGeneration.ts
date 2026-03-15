@@ -6,6 +6,7 @@ import type {
   TileRotation,
 } from '../types/projectTypes'
 import { getOppositeSide, getRotatedTileViews } from './compatibility'
+import { normalizeTileWeight } from './tileWeights'
 
 export type TerrainGenerationSettings = {
   width: number
@@ -29,6 +30,7 @@ type NeighborConstraint = {
 type CandidateIndex = {
   allCandidates: TerrainCandidate[]
   bySideAndBorder: Record<TileSide, Map<string, TerrainCandidate[]>>
+  weightByTileId: Map<string, number>
 }
 
 const DEFAULT_SEED = 0
@@ -55,6 +57,47 @@ const shuffleInPlace = <T>(items: T[], random: () => number) => {
   }
 
   return items
+}
+
+const getCandidateWeight = (
+  candidate: TerrainCandidate,
+  weightByTileId: Map<string, number>,
+) => weightByTileId.get(candidate.tileId) ?? 1
+
+const createWeightedCandidateOrder = (
+  candidates: TerrainCandidate[],
+  weightByTileId: Map<string, number>,
+  random: () => number,
+) => {
+  const remaining = [...candidates]
+  const ordered: TerrainCandidate[] = []
+
+  while (remaining.length > 0) {
+    const totalWeight = remaining.reduce(
+      (sum, candidate) => sum + getCandidateWeight(candidate, weightByTileId),
+      0,
+    )
+
+    if (totalWeight <= 0) {
+      return shuffleInPlace(remaining, random)
+    }
+
+    let threshold = random() * totalWeight
+    let chosenIndex = remaining.length - 1
+
+    for (let index = 0; index < remaining.length; index += 1) {
+      threshold -= getCandidateWeight(remaining[index], weightByTileId)
+      if (threshold < 0) {
+        chosenIndex = index
+        break
+      }
+    }
+
+    const [chosenCandidate] = remaining.splice(chosenIndex, 1)
+    ordered.push(chosenCandidate)
+  }
+
+  return ordered
 }
 
 const cloneGeneratedCell = (cell: GeneratedCell): GeneratedCell => ({
@@ -176,7 +219,12 @@ const buildCandidateIndex = (
   tiles: Tile[],
   rotatedViewsByTileId: Map<string, RotatedTileView[]>,
 ): CandidateIndex => {
-  const allCandidates = getAllRotatedCandidates(tiles, rotatedViewsByTileId)
+  const weightByTileId = new Map(
+    tiles.map((tile) => [tile.id, normalizeTileWeight(tile.weight)]),
+  )
+  const allCandidates = getAllRotatedCandidates(tiles, rotatedViewsByTileId).filter(
+    (candidate) => (weightByTileId.get(candidate.tileId) ?? 0) > 0,
+  )
   const bySideAndBorder = createEmptyCandidateLookup()
 
   allCandidates.forEach((candidate) => {
@@ -189,6 +237,7 @@ const buildCandidateIndex = (
   return {
     allCandidates,
     bySideAndBorder,
+    weightByTileId,
   }
 }
 
@@ -333,7 +382,11 @@ const solveTerrain = (
     return false
   }
 
-  const candidates = shuffleInPlace([...nextChoice.candidates], random)
+  const candidates = createWeightedCandidateOrder(
+    nextChoice.candidates,
+    candidateIndex.weightByTileId,
+    random,
+  )
 
   for (const candidate of candidates) {
     terrain.cells[nextChoice.y][nextChoice.x] = {
