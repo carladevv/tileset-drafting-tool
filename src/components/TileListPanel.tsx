@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+
 import { useProjectStore } from '../store/projectStore'
 import { TilePreview } from './TilePreview'
 
@@ -10,12 +12,27 @@ export function TileListPanel() {
   const duplicateTile = useProjectStore((state) => state.duplicateTile)
   const deleteTile = useProjectStore((state) => state.deleteTile)
   const selectTile = useProjectStore((state) => state.selectTile)
+  const tileRowRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const tilesWithWarnings = new Set(
     validationIssues
       .filter((issue) => issue.message.startsWith('No compatible tiles on the'))
       .map((issue) => issue.tileId)
       .filter((tileId): tileId is string => Boolean(tileId)),
   )
+
+  useEffect(() => {
+    if (!selectedTileId) {
+      return
+    }
+
+    const selectedTileRow = tileRowRefs.current[selectedTileId]
+    if (typeof selectedTileRow?.scrollIntoView === 'function') {
+      selectedTileRow.scrollIntoView({
+        block: 'nearest',
+        inline: 'nearest',
+      })
+    }
+  }, [selectedTileId])
 
   return (
     <section className="panel panel--tiles">
@@ -36,6 +53,9 @@ export function TileListPanel() {
               type="button"
               className={`tile-row ${tile.id === selectedTileId ? 'is-selected' : ''}`}
               onClick={() => selectTile(tile.id)}
+              ref={(element) => {
+                tileRowRefs.current[tile.id] = element
+              }}
             >
               <TilePreview tile={tile} labels={labels} />
               <span className="tile-row__meta">

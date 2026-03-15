@@ -350,7 +350,7 @@ describe('Stage 1 editor UI', () => {
 
     expect(nameInput).toHaveValue('Cliff Edge')
     expect(screen.getAllByRole('heading', { name: 'Cliff Edge' }).length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: /cliff edge/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /cliff edge.*rotations enabled by default/i })).toBeInTheDocument()
   })
 
   it('shows derived borders, matches, and warnings in the inspector and tile list', async () => {
@@ -390,6 +390,8 @@ describe('Stage 1 editor UI', () => {
 
     expect(screen.getByRole('heading', { name: /compatibility/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'east' })).toBeInTheDocument()
+    expect(document.body.textContent).toContain('[empty, empty, empty, empty, empty, River]')
+    expect(document.body.textContent).not.toContain('label_')
     expect(screen.getAllByText(/warning: no compatible tiles/i).length).toBeGreaterThan(0)
     expect(screen.getByLabelText(/compatibility warnings for river source/i)).toBeInTheDocument()
 
@@ -410,9 +412,14 @@ describe('Stage 1 editor UI', () => {
     westCells.forEach((cell) => fireEvent.mouseDown(cell, { buttons: 1 }))
     fireEvent.mouseUp(window)
 
-    await user.click(screen.getByRole('button', { name: /river source/i }))
+    await user.click(screen.getByRole('button', { name: /river source.*rotations enabled by default/i }))
 
     expect(screen.getAllByText('Matches: 1').length).toBeGreaterThan(0)
-    expect(screen.getByText(/river bank west/i)).toBeInTheDocument()
+    const compatibleTileButton = screen.getByRole('button', { name: /select compatible tile river bank on west/i })
+    expect(compatibleTileButton).toBeInTheDocument()
+
+    await user.click(compatibleTileButton)
+
+    expect(screen.getByRole('textbox', { name: /tile name/i })).toHaveValue('River Bank')
   })
 })

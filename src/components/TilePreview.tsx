@@ -4,7 +4,7 @@ import type { CellLabel, Tile } from '../types/projectTypes'
 type TilePreviewProps = {
   tile: Tile
   labels: CellLabel[]
-  size?: 'small' | 'large'
+  size?: 'tiny' | 'small' | 'large'
 }
 
 const getColorForCell = (cellLabelId: string, labels: CellLabel[]) =>

@@ -254,6 +254,11 @@ button {
   height: 48px;
 }
 
+.tile-preview--tiny {
+  width: 24px;
+  height: 24px;
+}
+
 .tile-preview--large {
   width: 144px;
   height: 144px;
@@ -398,13 +403,46 @@ input[type='color'] {
 }
 
 .compatibility-side__border {
-  margin: 8px 0;
-  color: #dfe9eb;
+  margin: 6px 0 4px;
+  font-size: 0.78rem;
+  color: #b5c8cc;
   word-break: break-word;
 }
 
 .compatibility-side__matches {
-  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 0;
+  list-style: none;
+  font-size: 0.78rem;
+  color: #dfe9eb;
+}
+
+.compatibility-match {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid #1b2629;
+  background: #2a3a3e;
+  color: inherit;
+  text-align: left;
+}
+
+.compatibility-match:hover {
+  background: #34494e;
+}
+
+.compatibility-match__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.compatibility-match__meta span:last-child {
+  color: #b5c8cc;
 }
 
 .compatibility-side__warning {
@@ -414,6 +452,7 @@ input[type='color'] {
 .issue-list {
   margin: 0;
   padding-left: 18px;
+  font-size: 0.78rem;
 }
 
 .issue-list__item--error {
