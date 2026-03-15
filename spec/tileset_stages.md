@@ -194,7 +194,38 @@ This stage extends the single-image association flow into a batch workflow.
 
 ---
 
-## Stage 8 — Detail Semantics Layer
+## Stage 8 — Cell Behavior Semantics Layer
+
+### Goal
+Add a lightweight behavior layer to cell labels so the system can support not only top-down terrain, but also more directional and gameplay-relevant tilesets such as platformers.
+
+This stage does not change compatibility rules.  
+Compatibility must still be computed from border label arrays exactly as before.
+
+Instead, this stage adds semantic meaning to the cell labels so they can later support:
+
+- detail placement rules
+- gameplay-aware tile semantics
+- broader tileset types beyond top-down terrain
+
+### Functionality added
+- extend `CellLabel` with an optional `behaviorType` field
+- allow editing `behaviorType` in the palette / label editor
+- persist `behaviorType` in project data
+- expose behavior information in tile and label inspection UI
+- allow generated terrain preview to inspect cell behavior values
+- prepare the data model for later detail placement rules
+
+### Behavior model
+
+Each `CellLabel` may now include:
+
+```ts
+behaviorType?: "empty" | "walkable" | "solid" | "platform" | "liquid" | "hazard" | "climbable"
+
+---
+
+## Stage 9 — Detail Semantics Layer
 
 ### Goal
 Prepare the system for future procedural detail placement by making internal cell labels meaningful, not just border data.
@@ -216,35 +247,3 @@ Your Blender workflow already includes a later detail-placement phase driven by 
 - detail-capable cells are highlighted in the tile editor
 - generated terrain can visualize detail-capable cells
 - changing a cell label updates detail previews immediately
-
----
-
-## Stage 9 — Validation and Review Layer
-
-### Goal
-Add quality-of-life validation to prepare for downstream 2D and future 3D / Blender workflows.
-
-### Testable aspects
-- validation panel summarizes issues by tile
-- tiles with missing names are flagged
-- tiles with undefined cell labels are flagged
-- tiles with no valid outgoing connections are flagged
-- missing associated images are reported where relevant
-- naming contract is enforced consistently across tiles and uploaded images
-- export includes enough metadata for downstream validation
-
----
-
-## Recommended implementation order
-1. Stage 1
-2. Stage 2
-3. Stage 3
-4. Stage 4
-5. Stage 5
-6. Stage 6
-7. Stage 7
-8. Stage 8
-9. Stage 9
-
-Stage 5 is kept before batch upload because single-image association is the simplest useful preview bridge.  
-Stage 8 comes before final validation polish because detail semantics are part of the intended long-term data model, not just a later add-on.
