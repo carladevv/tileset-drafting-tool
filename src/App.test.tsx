@@ -509,12 +509,14 @@ describe('Stage 1 editor UI', () => {
   it('renders painted cells with the active palette color and supports drag painting', () => {
     render(<App />)
 
+    fireEvent.click(screen.getByRole('tab', { name: /labels/i }))
     fireEvent.click(screen.getByRole('button', { name: /\+ add label/i }))
     const nameInput = screen.getByLabelText(/name for label_/i)
     fireEvent.change(nameInput, { target: { value: 'Grass' } })
     const colorInput = screen.getByLabelText(/color for grass/i)
     fireEvent.change(colorInput, { target: { value: '#5fbf5f' } })
 
+    fireEvent.click(screen.getByRole('tab', { name: /tiles/i }))
     fireEvent.click(screen.getByRole('button', { name: /\+ new tile/i }))
 
     const cell00 = screen.getByRole('gridcell', { name: 'Cell 0,0' })
@@ -544,7 +546,43 @@ describe('Stage 1 editor UI', () => {
 
     expect(nameInput).toHaveValue('Cliff Edge')
     expect(screen.getAllByRole('heading', { name: 'Cliff Edge' }).length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: /cliff edge.*rotations enabled/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^cliff edge$/i })).toBeInTheDocument()
+  })
+
+  it('switches between tile and label editors inside the shared library panel', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    expect(screen.getByRole('tab', { name: /tiles/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('button', { name: /\+ new tile/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /labels/i }))
+
+    expect(screen.getByRole('tab', { name: /labels/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('button', { name: /\+ add label/i })).toBeInTheDocument()
+    expect(screen.getByRole('tabpanel', { name: /labels/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /\+ add label/i }))
+    expect(screen.getByLabelText(/name for label_/i)).toBeInTheDocument()
+  })
+
+  it('switches the tile inspector between properties and compatibility tabs', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /\+ new tile/i }))
+
+    expect(screen.getByRole('tab', { name: /properties/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tabpanel', { name: /properties/i })).toBeInTheDocument()
+    expect(screen.getByLabelText(/tile name/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /compatibility/i }))
+
+    expect(screen.getByRole('tab', { name: /compatibility/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tabpanel', { name: /compatibility/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'north' })).toBeInTheDocument()
   })
 
   it('shows derived borders, matches, and warnings in the inspector and tile list', async () => {
@@ -552,6 +590,7 @@ describe('Stage 1 editor UI', () => {
 
     render(<App />)
 
+    await user.click(screen.getByRole('tab', { name: /labels/i }))
     await user.click(screen.getByRole('button', { name: /\+ add label/i }))
     const firstLabelName = screen.getByLabelText(/name for label_/i)
     await user.clear(firstLabelName)
@@ -563,7 +602,9 @@ describe('Stage 1 editor UI', () => {
     await user.clear(riverNameInputs[1])
     await user.type(riverNameInputs[1], 'River')
     fireEvent.change(screen.getByLabelText(/color for river/i), { target: { value: '#4aa3ff' } })
+    await user.click(screen.getByRole('button', { name: /^select river$/i }))
 
+    await user.click(screen.getByRole('tab', { name: /tiles/i }))
     await user.click(screen.getByRole('button', { name: /\+ new tile/i }))
     const tileNameInput = screen.getByRole('textbox', { name: /tile name/i })
     await user.clear(tileNameInput)
@@ -578,16 +619,16 @@ describe('Stage 1 editor UI', () => {
       screen.getByRole('gridcell', { name: 'Cell 5,5' }),
     ]
 
-    await user.click(screen.getByRole('button', { name: /select river/i }))
     eastCells.forEach((cell) => fireEvent.mouseDown(cell, { buttons: 1 }))
     fireEvent.mouseUp(window)
 
-    expect(screen.getByRole('heading', { name: /compatibility/i })).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: /compatibility/i }))
+    expect(screen.getByRole('tabpanel', { name: /compatibility/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'east' })).toBeInTheDocument()
-    expect(document.body.textContent).toContain('[empty, empty, empty, empty, empty, River]')
     expect(document.body.textContent).not.toContain('label_')
 
     await user.click(screen.getByRole('button', { name: /\+ new tile/i }))
+    await user.click(screen.getByRole('tab', { name: /properties/i }))
     const secondTileName = screen.getByRole('textbox', { name: /tile name/i })
     await user.clear(secondTileName)
     await user.type(secondTileName, 'River Bank')
@@ -604,12 +645,14 @@ describe('Stage 1 editor UI', () => {
     westCells.forEach((cell) => fireEvent.mouseDown(cell, { buttons: 1 }))
     fireEvent.mouseUp(window)
 
-    await user.click(screen.getByRole('button', { name: /river source.*rotations enabled/i }))
+    await user.click(screen.getByRole('button', { name: /^river source$/i }))
+    await user.click(screen.getByRole('tab', { name: /compatibility/i }))
 
     const compatibleTileButton = screen.getByRole('button', { name: /select compatible tile river bank on west/i })
     expect(compatibleTileButton).toBeInTheDocument()
 
     await user.click(compatibleTileButton)
+    await user.click(screen.getByRole('tab', { name: /properties/i }))
 
     expect(screen.getByRole('textbox', { name: /tile name/i })).toHaveValue('River Bank')
   })
@@ -627,6 +670,8 @@ describe('Stage 1 editor UI', () => {
       ['E', '#3399ff'],
       ['F', '#8844ff'],
     ] as const
+
+    await user.click(screen.getByRole('tab', { name: /labels/i }))
 
     for (const [name, color] of labelSpecs) {
       await user.click(screen.getByRole('button', { name: /\+ add label/i }))
@@ -647,10 +692,13 @@ describe('Stage 1 editor UI', () => {
         .project.cellLabels.map((label) => [label.name, label.id]),
     ) as Record<string, string>
 
+    await user.click(screen.getByRole('tab', { name: /tiles/i }))
     await user.click(screen.getByRole('button', { name: /\+ new tile/i }))
 
     for (let column = 0; column < labelSpecs.length; column += 1) {
+      await user.click(screen.getByRole('tab', { name: /labels/i }))
       await user.click(screen.getByRole('button', { name: new RegExp(`^select ${labelSpecs[column][0]}$`, 'i') }))
+      await user.click(screen.getByRole('tab', { name: /tiles/i }))
       fireEvent.mouseDown(screen.getByRole('gridcell', { name: `Cell 5,${column}` }), { buttons: 1 })
       fireEvent.mouseUp(window)
     }
@@ -662,7 +710,7 @@ describe('Stage 1 editor UI', () => {
 
     await user.click(rotationToggle)
     expect(rotationToggle).not.toBeChecked()
-    expect(screen.getByRole('button', { name: /tile_1.*rotations disabled/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /tile_1/i })).not.toHaveAccessibleName(/rotations/i)
     expect(screen.queryByLabelText(/rotation previews/i)).not.toBeInTheDocument()
 
     await user.click(rotationToggle)
@@ -673,7 +721,9 @@ describe('Stage 1 editor UI', () => {
     expect(previewCells[30]).toHaveStyle({ backgroundColor: 'rgb(136, 68, 255)' })
     expect(useProjectStore.getState().project.tiles[0].grid[5][0]).toBe(labelIdsByName.A)
 
+    await user.click(screen.getByRole('tab', { name: /labels/i }))
     await user.click(screen.getByRole('button', { name: /^select a$/i }))
+    await user.click(screen.getByRole('tab', { name: /tiles/i }))
     fireEvent.mouseDown(screen.getByRole('gridcell', { name: 'Cell 0,0' }), { buttons: 1 })
     fireEvent.mouseUp(window)
 

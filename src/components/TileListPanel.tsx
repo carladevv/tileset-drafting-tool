@@ -67,7 +67,6 @@ export function TileListPanel() {
                     </span>
                   ) : null}
                 </span>
-                <span>{tile.allowRotations ? 'Rotations enabled' : 'Rotations disabled'}</span>
               </span>
             </button>
           )
