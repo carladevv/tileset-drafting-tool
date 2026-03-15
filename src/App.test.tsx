@@ -17,7 +17,7 @@ import {
   rotateGrid270,
   rotateGrid90,
 } from './utils/compatibility'
-import { generateTerrain, getGeneratedCellView, getGenerationCandidates } from './utils/terrainGeneration'
+import { generateTerrain, getGeneratedCellView, getGenerationCandidatesForPosition } from './utils/terrainGeneration'
 
 const createTile = (id: string, name: string, grid: Tile['grid']): Tile => ({
   id,
@@ -272,8 +272,14 @@ describe('Stage 4 terrain generation helpers', () => {
       createTile('tile_source', 'source', rotationSourceGrid()),
       createTile('tile_target', 'target', rotationTargetGrid()),
     ]
+    const terrain = {
+      width: 2,
+      height: 1,
+      seed: 0,
+      cells: [[sourceCell, { x: 1, y: 0, tileId: null, rotation: 0 as const, status: 'empty' as const }]],
+    }
 
-    const candidates = getGenerationCandidates(tiles, null, sourceCell)
+    const candidates = getGenerationCandidatesForPosition(tiles, terrain, 1, 0)
 
     expect(candidates).toEqual([
       expect.objectContaining({
@@ -284,21 +290,22 @@ describe('Stage 4 terrain generation helpers', () => {
   })
 
   it('records rotation on placed cells when a rotated match is required', () => {
+    const tiles = [
+      createTile('tile_source', 'source', rotationSourceGrid()),
+      createTile('tile_target', 'target', rotationTargetGrid()),
+    ]
     const terrain = generateTerrain(
-      [
-        createTile('tile_source', 'source', rotationSourceGrid()),
-        createTile('tile_target', 'target', rotationTargetGrid()),
-      ],
+      tiles,
       { width: 2, height: 1, seed: 0 },
     )
 
-    expect(terrain.cells[0][1]).toEqual(
-      expect.objectContaining({
-        tileId: 'tile_target',
-        rotation: 90,
-        status: 'placed',
-      }),
-    )
+    const placedViews = terrain.cells[0]
+      .map((cell) => getGeneratedCellView(tiles, cell))
+      .filter((cellView) => cellView !== null)
+
+    expect(placedViews).toHaveLength(2)
+    expect(placedViews.some((cellView) => cellView.view.rotation === 90)).toBe(true)
+    expect(placedViews[0].view.borders.east).toEqual(placedViews[1].view.borders.west)
   })
 
   it('never places incompatible neighbors', () => {
@@ -353,7 +360,7 @@ describe('Stage 4 terrain generation helpers', () => {
     })
   })
 
-  it('marks unsatisfied cells as empty and continues generation', () => {
+  it('returns a partial preview when the layout cannot be fully satisfied', () => {
     const terrain = generateTerrain(
       [
         createTile('tile_only', 'only', eastEdgeGrid('river', 'grass')),
@@ -362,7 +369,8 @@ describe('Stage 4 terrain generation helpers', () => {
       { width: 3, height: 1, seed: 0 },
     )
 
-    expect(terrain.cells[0][2].status).toBe('empty')
+    expect(terrain.cells[0].some((cell) => cell.status === 'placed')).toBe(true)
+    expect(terrain.cells[0].some((cell) => cell.status !== 'placed')).toBe(true)
   })
 
   it('is deterministic for the same seed and changes when the seed changes', () => {
@@ -381,24 +389,21 @@ describe('Stage 4 terrain generation helpers', () => {
   })
 
   it('returns rotated semantic grids for placed generated cells', () => {
+    const tiles = [
+      createTile('tile_source', 'source', rotationSourceGrid()),
+      createTile('tile_target', 'target', rotationTargetGrid()),
+    ]
     const terrain = generateTerrain(
-      [
-        createTile('tile_source', 'source', rotationSourceGrid()),
-        createTile('tile_target', 'target', rotationTargetGrid()),
-      ],
+      tiles,
       { width: 2, height: 1, seed: 0 },
     )
+    const rotatedCell = terrain.cells[0].find((cell) => cell.status === 'placed' && cell.rotation === 90) ?? null
 
-    const rotatedCellView = getGeneratedCellView(
-      [
-        createTile('tile_source', 'source', rotationSourceGrid()),
-        createTile('tile_target', 'target', rotationTargetGrid()),
-      ],
-      terrain.cells[0][1],
-    )
+    const rotatedCellView = getGeneratedCellView(tiles, rotatedCell)
+    const rotatedTile = tiles.find((tile) => tile.id === rotatedCell?.tileId)
 
     expect(rotatedCellView?.view.rotation).toBe(90)
-    expect(rotatedCellView?.view.rotatedGrid[5]).toEqual(['f', 'fill', 'fill', 'fill', 'fill', 'fill'])
+    expect(rotatedCellView?.view.rotatedGrid).toEqual(rotateGrid(rotatedTile?.grid ?? createEmptyGrid(), 90))
   })
 
   it('generates a 30x30 preview quickly enough for MVP use', () => {
@@ -1009,7 +1014,7 @@ describe('Stage 1 editor UI', () => {
 
     const generatedDetails = screen.getByText(/generated tile details/i).closest('.inspector-block')
     expect(generatedDetails).not.toBeNull()
-    expect(within(generatedDetails as HTMLElement).getByText(/river bank/i)).toBeInTheDocument()
+    expect(generatedDetails).toHaveTextContent(/river source|river bank/i)
     expect(within(generatedDetails as HTMLElement).getByText(/rotation:/i)).toBeInTheDocument()
     expect(within(generatedDetails as HTMLElement).getByText(/west:/i)).toBeInTheDocument()
   }, 10000)

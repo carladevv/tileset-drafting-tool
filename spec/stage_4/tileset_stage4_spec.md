@@ -7,7 +7,9 @@ The system must use the compatibility graph created in Stage 2 and the
 rotation system from Stage 3 to generate a valid terrain grid composed
 of tiles.
 
-The preview renders using the semantic 6×6 grids rather than images.
+The preview renders using the semantic 6×6 grids rather than images and
+acts primarily as a visual sandbox for inspecting how the authored
+tileset reads when repeated across a larger area.
 
 ------------------------------------------------------------------------
 
@@ -56,16 +58,19 @@ Status values:
 
 ## Generation Algorithm (MVP)
 
-The generator may use a simple forward placement algorithm:
+The generator may use any deterministic compatibility-aware search
+strategy that fits the MVP, including backtracking.
 
-1.  choose a starting tile
-2.  iterate row by row
-3.  for each cell:
-    -   inspect already placed neighbors
-    -   compute compatible candidates
-    -   randomly choose from candidates
+For each candidate placement:
 
-If no candidates exist, mark the cell empty.
+1.  inspect already placed neighbors
+2.  compute compatible candidates
+3.  choose from those candidates using the generation seed
+4.  continue until no more useful placements can be made
+
+The goal is not to guarantee a hole-free result. Partial fills are
+acceptable as long as the preview remains stable, readable, and useful
+for visual evaluation.
 
 ------------------------------------------------------------------------
 
@@ -100,8 +105,9 @@ Selection may be random using the generation seed.
 
 If no candidate exists:
 
--   mark the cell empty
--   continue generation
+-   leave the preview in a safe non-crashing state
+-   allow partially filled output
+-   surface the result clearly in the UI
 
 The generator must never crash.
 
@@ -183,7 +189,8 @@ The generator must:
 
 -   never place incompatible tiles
 -   never crash due to missing candidates
--   mark impossible cells empty
+-   tolerate partial or incomplete fills without treating them as a
+    failure of the preview workflow
 -   be deterministic for the same seed
 
 ------------------------------------------------------------------------
@@ -196,3 +203,5 @@ Stage 4 is complete when the user can:
 -   see valid compatibility-based placement
 -   regenerate terrain with a seed
 -   inspect tiles inside the preview
+-   use the preview to judge visual variety and adjacency behavior even
+    when not every cell is filled

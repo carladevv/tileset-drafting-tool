@@ -21,14 +21,14 @@ export type TerrainCandidate = {
 
 type TileSide = 'north' | 'east' | 'south' | 'west'
 
-type Position = {
-  x: number
-  y: number
-}
-
 type NeighborConstraint = {
   side: TileSide
   neighbor: GeneratedCell
+}
+
+type CandidateIndex = {
+  allCandidates: TerrainCandidate[]
+  bySideAndBorder: Record<TileSide, Map<string, TerrainCandidate[]>>
 }
 
 const DEFAULT_SEED = 0
@@ -72,12 +72,6 @@ const cloneTerrain = (terrain: GeneratedTerrain): GeneratedTerrain => ({
   cells: terrain.cells.map((row) => row.map(cloneGeneratedCell)),
 })
 
-const getPlacedCellCount = (terrain: GeneratedTerrain) =>
-  terrain.cells.reduce(
-    (count, row) => count + row.filter((cell) => cell.status === 'placed').length,
-    0,
-  )
-
 const getCellAt = (terrain: GeneratedTerrain, x: number, y: number) =>
   terrain.cells[y]?.[x] ?? null
 
@@ -118,25 +112,6 @@ const getPlacedNeighborView = (
   return views.find((view) => view.rotation === cell.rotation) ?? null
 }
 
-const candidateMatchesConstraint = (
-  candidate: TerrainCandidate,
-  constraint: NeighborConstraint,
-  rotatedViewsByTileId: Map<string, RotatedTileView[]>,
-) => {
-  const neighborView = getPlacedNeighborView(rotatedViewsByTileId, constraint.neighbor)
-  if (!neighborView) {
-    return false
-  }
-
-  const candidateSide = constraint.side
-  const neighborSide = getOppositeSide(candidateSide)
-
-  return (
-    serializeBorder(candidate.view.borders[candidateSide]) ===
-    serializeBorder(neighborView.borders[neighborSide])
-  )
-}
-
 export const createEmptyGeneratedCell = (
   x: number,
   y: number,
@@ -171,8 +146,51 @@ const getAllRotatedCandidates = (
       tileId: tile.id,
       rotation: view.rotation,
       view,
-    })),
+      })),
   )
+
+const createEmptyCandidateLookup = (): CandidateIndex['bySideAndBorder'] => ({
+  north: new Map<string, TerrainCandidate[]>(),
+  east: new Map<string, TerrainCandidate[]>(),
+  south: new Map<string, TerrainCandidate[]>(),
+  west: new Map<string, TerrainCandidate[]>(),
+})
+
+const addCandidateToLookup = (
+  lookup: CandidateIndex['bySideAndBorder'],
+  candidate: TerrainCandidate,
+  side: TileSide,
+) => {
+  const borderKey = serializeBorder(candidate.view.borders[side])
+  const bucket = lookup[side].get(borderKey)
+
+  if (bucket) {
+    bucket.push(candidate)
+    return
+  }
+
+  lookup[side].set(borderKey, [candidate])
+}
+
+const buildCandidateIndex = (
+  tiles: Tile[],
+  rotatedViewsByTileId: Map<string, RotatedTileView[]>,
+): CandidateIndex => {
+  const allCandidates = getAllRotatedCandidates(tiles, rotatedViewsByTileId)
+  const bySideAndBorder = createEmptyCandidateLookup()
+
+  allCandidates.forEach((candidate) => {
+    addCandidateToLookup(bySideAndBorder, candidate, 'north')
+    addCandidateToLookup(bySideAndBorder, candidate, 'east')
+    addCandidateToLookup(bySideAndBorder, candidate, 'south')
+    addCandidateToLookup(bySideAndBorder, candidate, 'west')
+  })
+
+  return {
+    allCandidates,
+    bySideAndBorder,
+  }
+}
 
 export const getGenerationCandidatesForPosition = (
   tiles: Tile[],
@@ -181,15 +199,16 @@ export const getGenerationCandidatesForPosition = (
   y: number,
 ): TerrainCandidate[] => {
   const rotatedViewsByTileId = buildRotatedViewsByTileId(tiles)
-  return getGenerationCandidatesForPositionWithCache(tiles, terrain, x, y, rotatedViewsByTileId)
+  const candidateIndex = buildCandidateIndex(tiles, rotatedViewsByTileId)
+  return getGenerationCandidatesForPositionWithCache(terrain, x, y, rotatedViewsByTileId, candidateIndex)
 }
 
 const getGenerationCandidatesForPositionWithCache = (
-  tiles: Tile[],
   terrain: GeneratedTerrain,
   x: number,
   y: number,
   rotatedViewsByTileId: Map<string, RotatedTileView[]>,
+  candidateIndex: CandidateIndex,
 ): TerrainCandidate[] => {
   const cell = getCellAt(terrain, x, y)
   if (!cell || cell.status === 'placed') {
@@ -197,18 +216,38 @@ const getGenerationCandidatesForPositionWithCache = (
   }
 
   const constraints = getPlacedNeighborConstraints(terrain, x, y)
-  const allCandidates = getAllRotatedCandidates(tiles, rotatedViewsByTileId)
 
   // No placed neighbors yet: everything is allowed.
   if (constraints.length === 0) {
-    return allCandidates
+    return candidateIndex.allCandidates
   }
 
-  return allCandidates.filter((candidate) =>
-    constraints.every((constraint) =>
-      candidateMatchesConstraint(candidate, constraint, rotatedViewsByTileId),
-    ),
-  )
+  const candidateBuckets = constraints
+    .map((constraint) => {
+      const neighborView = getPlacedNeighborView(rotatedViewsByTileId, constraint.neighbor)
+      if (!neighborView) {
+        return []
+      }
+
+      const neighborSide = getOppositeSide(constraint.side)
+      const borderKey = serializeBorder(neighborView.borders[neighborSide])
+      return candidateIndex.bySideAndBorder[constraint.side].get(borderKey) ?? []
+    })
+    .sort((left, right) => left.length - right.length)
+
+  const [smallestBucket, ...remainingBuckets] = candidateBuckets
+  if (!smallestBucket || smallestBucket.length === 0) {
+    return []
+  }
+
+  return remainingBuckets.reduce<TerrainCandidate[]>((candidates, bucket) => {
+    if (candidates.length === 0 || bucket.length === 0) {
+      return []
+    }
+
+    const allowed = new Set(bucket)
+    return candidates.filter((candidate) => allowed.has(candidate))
+  }, smallestBucket)
 }
 
 type NextCellChoice = {
@@ -218,9 +257,9 @@ type NextCellChoice = {
 }
 
 const findMostConstrainedEmptyCell = (
-  tiles: Tile[],
   terrain: GeneratedTerrain,
   rotatedViewsByTileId: Map<string, RotatedTileView[]>,
+  candidateIndex: CandidateIndex,
 ): NextCellChoice | null => {
   let bestChoice: NextCellChoice | null = null
 
@@ -232,11 +271,11 @@ const findMostConstrainedEmptyCell = (
       }
 
       const candidates = getGenerationCandidatesForPositionWithCache(
-        tiles,
         terrain,
         x,
         y,
         rotatedViewsByTileId,
+        candidateIndex,
       )
 
       // Immediate contradiction: this is the best possible choice because it fails now.
@@ -270,19 +309,19 @@ const markRemainingEmptyCellsAsInvalid = (terrain: GeneratedTerrain) => {
 }
 
 const solveTerrain = (
-  tiles: Tile[],
   terrain: GeneratedTerrain,
   rotatedViewsByTileId: Map<string, RotatedTileView[]>,
+  candidateIndex: CandidateIndex,
   random: () => number,
+  placedCount: number,
   bestSnapshotRef: { terrain: GeneratedTerrain; placedCount: number },
 ): boolean => {
-  const placedCount = getPlacedCellCount(terrain)
   if (placedCount > bestSnapshotRef.placedCount) {
     bestSnapshotRef.placedCount = placedCount
     bestSnapshotRef.terrain = cloneTerrain(terrain)
   }
 
-  const nextChoice = findMostConstrainedEmptyCell(tiles, terrain, rotatedViewsByTileId)
+  const nextChoice = findMostConstrainedEmptyCell(terrain, rotatedViewsByTileId, candidateIndex)
 
   // No empty cells left => solved.
   if (!nextChoice) {
@@ -305,7 +344,14 @@ const solveTerrain = (
       status: 'placed',
     }
 
-    const solved = solveTerrain(tiles, terrain, rotatedViewsByTileId, random, bestSnapshotRef)
+    const solved = solveTerrain(
+      terrain,
+      rotatedViewsByTileId,
+      candidateIndex,
+      random,
+      placedCount + 1,
+      bestSnapshotRef,
+    )
     if (solved) {
       return true
     }
@@ -332,13 +378,14 @@ export const generateTerrain = (
 
   const random = createSeededRandom(settings.seed ?? DEFAULT_SEED)
   const rotatedViewsByTileId = buildRotatedViewsByTileId(tiles)
+  const candidateIndex = buildCandidateIndex(tiles, rotatedViewsByTileId)
 
   const bestSnapshotRef = {
     terrain: cloneTerrain(terrain),
     placedCount: 0,
   }
 
-  const solved = solveTerrain(tiles, terrain, rotatedViewsByTileId, random, bestSnapshotRef)
+  const solved = solveTerrain(terrain, rotatedViewsByTileId, candidateIndex, random, 0, bestSnapshotRef)
 
   if (solved) {
     return terrain

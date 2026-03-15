@@ -121,7 +121,7 @@ Support automatic logical rotation variants and reflect them in compatibility an
 ## Stage 4 — Terrain Generation Preview in Semantic Grid Mode
 
 ### Goal
-Generate a terrain preview using the computed compatibility graph and display it using the 6x6 semantic cell grids.
+Generate a terrain preview using the computed compatibility graph and display it using the 6x6 semantic cell grids so artists can quickly inspect how a tileset reads visually at map scale.
 
 ### Why here
 The current Blender workflow already depends on building an adjacency index and then generating terrain from valid neighbors, with optional rotation generation. This stage mirrors that logic in a 2D MVP form. :contentReference[oaicite:2]{index=2} :contentReference[oaicite:3]{index=3}
@@ -129,7 +129,7 @@ The current Blender workflow already depends on building an adjacency index and 
 ### Testable aspects
 - preview grid renders with selected dimensions
 - generator only places compatible neighbors
-- unsatisfied cells are shown as holes / warnings instead of crashing
+- preview remains useful for visual inspection even when some cells cannot be filled
 - regeneration with the same seed gives the same result
 - clicking a generated tile reveals its source tile name and border arrays
 - preview performance is acceptable for MVP grid sizes
