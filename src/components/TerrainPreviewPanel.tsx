@@ -92,6 +92,7 @@ export function TerrainPreviewPanel() {
                           tile={cellView.tile}
                           labels={project.cellLabels}
                           grid={cellView.view.rotatedGrid}
+                          rotation={cellView.view.rotation}
                           size="medium"
                           ariaLabel={`Generated tile ${cellView.tile.name} at ${x},${y}`}
                         />

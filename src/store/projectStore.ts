@@ -20,6 +20,7 @@ import {
   deriveTileBorders,
 } from '../utils/compatibility'
 import { generateTerrain } from '../utils/terrainGeneration'
+import { validateTileImageAsset } from '../utils/tileImageAssets'
 import { DEFAULT_TILE_WEIGHT, normalizeTileWeight } from '../utils/tileWeights'
 
 const STORAGE_KEY = 'tileset-drafting-tool.stage-1.project'
@@ -120,6 +121,21 @@ export const validateProject = (project: Project): ValidationIssue[] => {
         }
       })
     })
+
+    if (tile.imageAsset) {
+      const imageError = validateTileImageAsset(tile.imageAsset)
+
+      if (imageError) {
+        issues.push(
+          createValidationIssue({
+            severity: 'error',
+            scope: 'tile',
+            message: imageError,
+            tileId: tile.id,
+          }),
+        )
+      }
+    }
   }
 
   for (const tile of project.tiles) {
@@ -166,6 +182,7 @@ type ProjectStoreState = {
   selectedLabelId: string | null
   generatedTerrain: GeneratedTerrain | null
   selectedGeneratedCell: { x: number; y: number } | null
+  tileImageUploadError: string | null
   validationIssues: ValidationIssue[]
 }
 
@@ -187,6 +204,10 @@ type ProjectStoreActions = {
   getCompatibilityGraph: () => CompatibilityGraph
   getCompatibilityForTile: (tileId: string) => TileCompatibility
   updateGenerationSettings: (updates: Partial<Pick<Project['settings'], 'generationWidth' | 'generationHeight' | 'generationSeed'>>) => void
+  setTileImageAsset: (tileId: string, imageAsset: NonNullable<Tile['imageAsset']>) => void
+  removeTileImageAsset: (tileId: string) => void
+  setPreviewMode: (previewMode: Project['settings']['previewMode']) => void
+  setTileImageUploadError: (message: string | null) => void
   generateTerrainPreview: () => void
   selectGeneratedCell: (selection: { x: number; y: number } | null) => void
   getSelectedGeneratedTerrainCell: () => GeneratedTerrain['cells'][number][number] | null
@@ -228,6 +249,7 @@ const createInitialState = (): ProjectStoreState => ({
   selectedLabelId: null,
   generatedTerrain: null,
   selectedGeneratedCell: null,
+  tileImageUploadError: null,
 })
 
 const createGeneratedTerrain = (project: Project) => {
@@ -453,6 +475,51 @@ export const useProjectStore = create<ProjectStore>()(
         set(withValidation(nextProject))
       },
 
+      setTileImageAsset: (tileId, imageAsset) => {
+        const { project } = get()
+        const nextProject = {
+          ...project,
+          settings: {
+            ...project.settings,
+            defaultTileImageSize: imageAsset.width,
+          },
+          tiles: project.tiles.map((tile) => (tile.id === tileId ? { ...tile, imageAsset } : tile)),
+        }
+
+        set({
+          ...withValidation(nextProject),
+          tileImageUploadError: null,
+        })
+      },
+
+      removeTileImageAsset: (tileId) => {
+        const { project } = get()
+        const nextProject = {
+          ...project,
+          tiles: project.tiles.map((tile) => (tile.id === tileId ? { ...tile, imageAsset: null } : tile)),
+        }
+
+        set({
+          ...withValidation(nextProject),
+          tileImageUploadError: null,
+        })
+      },
+
+      setPreviewMode: (previewMode) => {
+        const { project } = get()
+        const nextProject = {
+          ...project,
+          settings: {
+            ...project.settings,
+            previewMode,
+          },
+        }
+
+        set(withValidation(nextProject))
+      },
+
+      setTileImageUploadError: (message) => set({ tileImageUploadError: message }),
+
       generateTerrainPreview: () => {
         const { project } = get()
         set({
@@ -481,6 +548,7 @@ export const useProjectStore = create<ProjectStore>()(
           selectedLabelId: getNextSelectedLabelId(project.cellLabels, get().selectedLabelId),
           generatedTerrain: createGeneratedTerrain(project),
           selectedGeneratedCell: null,
+          tileImageUploadError: null,
         }),
 
       resetProject: () => set(createInitialState()),
@@ -501,6 +569,7 @@ export const useProjectStore = create<ProjectStore>()(
           selectedLabelId: getNextSelectedLabelId(persistedProject.cellLabels),
           generatedTerrain: createGeneratedTerrain(persistedProject),
           selectedGeneratedCell: null,
+          tileImageUploadError: null,
         }
       },
     },

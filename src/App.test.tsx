@@ -18,6 +18,7 @@ import {
   rotateGrid90,
 } from './utils/compatibility'
 import { generateTerrain, getGeneratedCellView, getGenerationCandidatesForPosition } from './utils/terrainGeneration'
+import { getTilePreviewSource, readImageFile } from './utils/tileImageAssets'
 
 const createTile = (id: string, name: string, grid: Tile['grid']): Tile => ({
   id,
@@ -82,6 +83,8 @@ const rotationTargetGrid = (): Tile['grid'] => [
 ]
 
 const uniformGrid = (label: string): Tile['grid'] => Array.from({ length: 6 }, () => Array.from({ length: 6 }, () => label))
+
+const createImageFile = (name: string, type: string) => new File(['pixel-data'], name, { type })
 
 const westEdgeGrid = (label: string, fill = 'fill'): Tile['grid'] =>
   Array.from({ length: 6 }, (_, row) =>
@@ -1126,4 +1129,267 @@ describe('Stage 1 editor UI', () => {
     expect(within(generatedDetails as HTMLElement).getByText(/rotation:/i)).toBeInTheDocument()
     expect(within(generatedDetails as HTMLElement).getByText(/west:/i)).toBeInTheDocument()
   }, 10000)
+})
+
+describe('Stage 5 image association helpers', () => {
+  beforeEach(() => {
+    useProjectStore.getState().resetProject()
+  })
+
+  it('reads valid square images into tile image assets', async () => {
+    const asset = await readImageFile(createImageFile('tile-square.png', 'image/png'))
+
+    expect(asset).toMatchObject({
+      filename: 'tile-square.png',
+      mimeType: 'image/png',
+      width: 64,
+      height: 64,
+    })
+    expect(asset.dataUrl).toMatch(/^data:image\/png;base64,/)
+  })
+
+  it('rejects unsupported file types', async () => {
+    await expect(readImageFile(createImageFile('tile.txt', 'text/plain'))).rejects.toThrow(/unsupported image type/i)
+  })
+
+  it('chooses semantic or image preview sources based on preview mode and fallback', () => {
+    const semanticTile = createTile('tile_semantic', 'semantic', uniformGrid('grass'))
+    const imageTile = {
+      ...createTile('tile_image', 'image', uniformGrid('grass')),
+      imageAsset: {
+        id: 'image_1',
+        filename: 'tile-square.png',
+        mimeType: 'image/png',
+        width: 64,
+        height: 64,
+        dataUrl: 'data:image/png;base64,AAAA',
+      },
+    }
+
+    expect(getTilePreviewSource(imageTile, 'semantic')).toBe('semantic')
+    expect(getTilePreviewSource(imageTile, 'image')).toEqual(imageTile.imageAsset)
+    expect(getTilePreviewSource(semanticTile, 'image')).toBe('semantic')
+  })
+
+  it('does not treat a missing image as a validation error', () => {
+    const project = createDefaultProject()
+    project.cellLabels = [{ id: 'grass', name: 'Grass', color: '#5fbf5f' }]
+    project.tiles = [createTile('tile_grass', 'Grass', uniformGrid('grass'))]
+
+    expect(validateProject(project).some((issue) => issue.message.toLowerCase().includes('image'))).toBe(false)
+  })
+
+  it('flags non-square associated images as validation errors', () => {
+    const project = createDefaultProject()
+    project.cellLabels = [{ id: 'grass', name: 'Grass', color: '#5fbf5f' }]
+    project.tiles = [
+      {
+        ...createTile('tile_grass', 'Grass', uniformGrid('grass')),
+        imageAsset: {
+          id: 'image_bad',
+          filename: 'tile-wide.png',
+          mimeType: 'image/png',
+          width: 96,
+          height: 64,
+          dataUrl: 'data:image/png;base64,AAAA',
+        },
+      },
+    ]
+
+    expect(validateProject(project)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ message: 'Tile image must be square.' })]),
+    )
+  })
+})
+
+describe('Stage 5 store behavior', () => {
+  beforeEach(() => {
+    useProjectStore.getState().resetProject()
+  })
+
+  it('assigns, replaces, and removes tile image assets', () => {
+    const tileId = useProjectStore.getState().createTile()
+
+    useProjectStore.getState().setTileImageAsset(tileId, {
+      id: 'image_1',
+      filename: 'tile-square.png',
+      mimeType: 'image/png',
+      width: 64,
+      height: 64,
+      dataUrl: 'data:image/png;base64,AAAA',
+    })
+    expect(useProjectStore.getState().project.tiles[0].imageAsset?.filename).toBe('tile-square.png')
+
+    useProjectStore.getState().setTileImageAsset(tileId, {
+      id: 'image_2',
+      filename: 'tile-replacement.jpg',
+      mimeType: 'image/jpeg',
+      width: 256,
+      height: 256,
+      dataUrl: 'data:image/jpeg;base64,BBBB',
+    })
+    expect(useProjectStore.getState().project.tiles[0].imageAsset?.filename).toBe('tile-replacement.jpg')
+
+    useProjectStore.getState().removeTileImageAsset(tileId)
+    expect(useProjectStore.getState().project.tiles[0].imageAsset).toBeNull()
+  })
+
+  it('persists image assets and preview mode across reload', () => {
+    const tileId = useProjectStore.getState().createTile()
+
+    useProjectStore.getState().setTileImageAsset(tileId, {
+      id: 'image_1',
+      filename: 'tile-square.webp',
+      mimeType: 'image/webp',
+      width: 128,
+      height: 128,
+      dataUrl: 'data:image/webp;base64,CCCC',
+    })
+    useProjectStore.getState().setPreviewMode('image')
+
+    const stored = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as { state?: { project?: Project } }
+    useProjectStore.getState().replaceProject(stored.state?.project ?? createDefaultProject())
+
+    expect(useProjectStore.getState().project.settings.previewMode).toBe('image')
+    expect(useProjectStore.getState().project.tiles[0].imageAsset?.filename).toBe('tile-square.webp')
+  })
+
+  it('does not change terrain placement results when images are associated', () => {
+    const project = createDefaultProject()
+    project.cellLabels = [{ id: 'grass', name: 'Grass', color: '#5fbf5f' }]
+    project.tiles = [
+      createTile('tile_a', 'A', uniformGrid('grass')),
+      createTile('tile_b', 'B', uniformGrid('grass')),
+    ]
+    project.settings.generationWidth = 4
+    project.settings.generationHeight = 4
+    project.settings.generationSeed = 7
+
+    useProjectStore.getState().replaceProject(project)
+    const before = generateTerrain(useProjectStore.getState().project.tiles, {
+      width: 4,
+      height: 4,
+      seed: 7,
+    })
+
+    useProjectStore.getState().setTileImageAsset('tile_a', {
+      id: 'image_1',
+      filename: 'tile-square.png',
+      mimeType: 'image/png',
+      width: 64,
+      height: 64,
+      dataUrl: 'data:image/png;base64,AAAA',
+    })
+
+    const after = generateTerrain(useProjectStore.getState().project.tiles, {
+      width: 4,
+      height: 4,
+      seed: 7,
+    })
+
+    expect(after).toEqual(before)
+  })
+})
+
+describe('Stage 5 editor UI', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    useProjectStore.getState().resetProject()
+  })
+
+  it('uploads valid tile images, rejects non-square images, and restores fallback after removal', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /\+ new tile/i }))
+
+    const uploadInput = screen.getByLabelText(/upload tile image/i)
+
+    await user.upload(uploadInput, createImageFile('tile-square.png', 'image/png'))
+    expect(screen.getByText(/filename: tile-square\.png/i)).toBeInTheDocument()
+    expect(useProjectStore.getState().project.tiles[0].imageAsset?.filename).toBe('tile-square.png')
+
+    await user.upload(uploadInput, createImageFile('tile-wide.png', 'image/png'))
+    expect(screen.getByText(/tile image must be square/i)).toBeInTheDocument()
+    expect(useProjectStore.getState().project.tiles[0].imageAsset?.filename).toBe('tile-square.png')
+
+    await user.click(screen.getByRole('button', { name: /^remove$/i }))
+    expect(useProjectStore.getState().project.tiles[0].imageAsset).toBeNull()
+    expect(screen.getByText(/filename: none/i)).toBeInTheDocument()
+  })
+
+  it('switches preview mode between semantic and image across the tile list and inspector', async () => {
+    const user = userEvent.setup()
+
+    const project = createDefaultProject()
+    project.cellLabels = [{ id: 'grass', name: 'Grass', color: '#5fbf5f' }]
+    project.tiles = [
+      {
+        ...createTile('tile_image', 'Image Tile', uniformGrid('grass')),
+        imageAsset: {
+          id: 'image_1',
+          filename: 'tile-square.png',
+          mimeType: 'image/png',
+          width: 64,
+          height: 64,
+          dataUrl: 'data:image/png;base64,AAAA',
+        },
+      },
+      createTile('tile_fallback', 'Fallback Tile', uniformGrid('grass')),
+    ]
+
+    useProjectStore.getState().replaceProject(project)
+    render(<App />)
+
+    const tileRows = screen.getAllByRole('button').filter((element) => element.className.includes('tile-row'))
+    expect(tileRows[0].querySelector('[data-preview-kind="semantic"]')).not.toBeNull()
+
+    await user.click(screen.getByRole('radio', { name: /image/i }))
+
+    expect(useProjectStore.getState().project.settings.previewMode).toBe('image')
+    expect(tileRows[0].querySelector('[data-preview-kind="image"]')).not.toBeNull()
+    expect(tileRows[1].querySelector('[data-preview-kind="semantic"]')).not.toBeNull()
+    expect(screen.getByLabelText(/preview for image tile/i).getAttribute('data-preview-kind')).toBe('image')
+
+    await user.click(screen.getByRole('radio', { name: /semantic/i }))
+
+    expect(tileRows[0].querySelector('[data-preview-kind="semantic"]')).not.toBeNull()
+    expect(screen.getByLabelText(/preview for image tile/i).getAttribute('data-preview-kind')).toBe('semantic')
+  })
+
+  it('uses image previews in generated terrain when preview mode is image and falls back when absent', async () => {
+    const user = userEvent.setup()
+
+    const project = createDefaultProject()
+    project.cellLabels = [{ id: 'grass', name: 'Grass', color: '#5fbf5f' }]
+    project.tiles = [
+      {
+        ...createTile('tile_image', 'Image Tile', uniformGrid('grass')),
+        imageAsset: {
+          id: 'image_1',
+          filename: 'tile-square.png',
+          mimeType: 'image/png',
+          width: 64,
+          height: 64,
+          dataUrl: 'data:image/png;base64,AAAA',
+        },
+      },
+      createTile('tile_fallback', 'Fallback Tile', uniformGrid('grass')),
+    ]
+    project.settings.generationWidth = 2
+    project.settings.generationHeight = 1
+    project.settings.generationSeed = 0
+
+    useProjectStore.getState().replaceProject(project)
+    render(<App />)
+
+    await user.click(screen.getByRole('radio', { name: /image/i }))
+    await user.click(screen.getByRole('tab', { name: /terrain preview/i }))
+    await user.click(screen.getByRole('button', { name: /^generate$/i }))
+
+    const generatedCells = screen.getAllByRole('gridcell').filter((element) => element.className.includes('terrain-grid__cell'))
+    expect(generatedCells.length).toBeGreaterThan(0)
+    expect(document.querySelectorAll('.terrain-grid [data-preview-kind="image"], .terrain-grid [data-preview-kind="semantic"]').length).toBeGreaterThan(0)
+    expect(document.querySelector('.terrain-grid [data-preview-kind="image"], .terrain-grid [data-preview-kind="semantic"]')).not.toBeNull()
+  })
 })

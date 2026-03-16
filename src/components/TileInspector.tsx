@@ -1,30 +1,60 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { useProjectStore } from '../store/projectStore'
 import { getRotatedTileViews, tileSides } from '../utils/compatibility'
+import { readImageFile, validateTileImageAsset } from '../utils/tileImageAssets'
 import { DEFAULT_TILE_WEIGHT, MAX_TILE_WEIGHT, MIN_TILE_WEIGHT } from '../utils/tileWeights'
 import { TilePreview } from './TilePreview'
 
 export function TileInspector() {
   const [activeTab, setActiveTab] = useState<'properties' | 'compatibility'>('properties')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const project = useProjectStore((state) => state.project)
   const tiles = useProjectStore((state) => state.project.tiles)
   const labels = useProjectStore((state) => state.project.cellLabels)
   const selectedTileId = useProjectStore((state) => state.selectedTileId)
+  const tileImageUploadError = useProjectStore((state) => state.tileImageUploadError)
   const validationIssues = useProjectStore((state) => state.validationIssues)
   const updateTileName = useProjectStore((state) => state.updateTileName)
   const updateTileWeight = useProjectStore((state) => state.updateTileWeight)
   const setTileRotationEnabled = useProjectStore((state) => state.setTileRotationEnabled)
+  const setTileImageAsset = useProjectStore((state) => state.setTileImageAsset)
+  const removeTileImageAsset = useProjectStore((state) => state.removeTileImageAsset)
+  const setPreviewMode = useProjectStore((state) => state.setPreviewMode)
+  const setTileImageUploadError = useProjectStore((state) => state.setTileImageUploadError)
   const getTileBorders = useProjectStore((state) => state.getTileBorders)
   const getCompatibilityForTile = useProjectStore((state) => state.getCompatibilityForTile)
   const selectTile = useProjectStore((state) => state.selectTile)
   const tile = tiles.find((entry) => entry.id === selectedTileId) ?? null
   const issues = validationIssues.filter((issue) => issue.tileId === selectedTileId)
+  const imageValidationIssue = issues.find((issue) => issue.message.toLowerCase().includes('image'))
+  const imageMessage = tileImageUploadError ?? imageValidationIssue?.message ?? null
   const borders = selectedTileId ? getTileBorders(selectedTileId) : null
   const compatibility = selectedTileId ? getCompatibilityForTile(selectedTileId) : null
   const rotatedViews = tile ? getRotatedTileViews({ ...tile, allowRotations: tile.allowRotations }) : []
 
   const getTileName = (tileId: string) => tiles.find((entry) => entry.id === tileId)?.name || 'Untitled tile'
   const getTile = (tileId: string) => tiles.find((entry) => entry.id === tileId) ?? null
+
+  const handleImageSelection = async (file: File | null) => {
+    if (!tile || !file) {
+      return
+    }
+
+    try {
+      const imageAsset = await readImageFile(file)
+      const imageError = validateTileImageAsset(imageAsset)
+
+      if (imageError) {
+        setTileImageUploadError(imageError)
+        return
+      }
+
+      setTileImageAsset(tile.id, imageAsset)
+    } catch (error) {
+      setTileImageUploadError(error instanceof Error ? error.message : 'Image file could not be read.')
+    }
+  }
 
   return (
     <section className="panel panel--inspector">
@@ -115,6 +145,7 @@ export function TileInspector() {
                           tile={tile}
                           labels={labels}
                           grid={view.rotatedGrid}
+                          rotation={view.rotation}
                           size="small"
                           ariaLabel={`Rotated preview ${view.rotation} degrees`}
                         />
@@ -122,6 +153,64 @@ export function TileInspector() {
                       </div>
                     ))}
                   </div>
+                </div>
+                <div className="field-group">
+                  <span>Preview Mode</span>
+                  <div className="segmented-control" role="radiogroup" aria-label="Preview mode">
+                    <button
+                      type="button"
+                      role="radio"
+                      className={`panel-tab ${project.settings.previewMode === 'semantic' ? 'is-active' : ''}`}
+                      aria-checked={project.settings.previewMode === 'semantic'}
+                      onClick={() => setPreviewMode('semantic')}
+                    >
+                      Semantic
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      className={`panel-tab ${project.settings.previewMode === 'image' ? 'is-active' : ''}`}
+                      aria-checked={project.settings.previewMode === 'image'}
+                      onClick={() => setPreviewMode('image')}
+                    >
+                      Image
+                    </button>
+                  </div>
+                </div>
+                <div className="inspector-block">
+                  <h3>Tile Preview</h3>
+                  <TilePreview tile={tile} labels={labels} size="large" ariaLabel={`Preview for ${tile.name || 'Untitled tile'}`} />
+                </div>
+                <div className="inspector-block">
+                  <h3>Image</h3>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="visually-hidden"
+                    aria-label="Upload tile image"
+                    onChange={(event) => {
+                      void handleImageSelection(event.target.files?.[0] ?? null)
+                      event.currentTarget.value = ''
+                    }}
+                  />
+                  <div className="image-controls">
+                    <button type="button" className="pixel-button" onClick={() => fileInputRef.current?.click()}>
+                      Upload
+                    </button>
+                    <button
+                      type="button"
+                      className="pixel-button"
+                      onClick={() => removeTileImageAsset(tile.id)}
+                      disabled={!tile.imageAsset}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <p className="panel-hint">Filename: {tile.imageAsset?.filename ?? 'None'}</p>
+                  <p className={`validation-note ${imageMessage ? 'validation-note--error' : ''}`} aria-live="polite">
+                    {imageMessage ?? 'Square PNG, JPG, and WebP images are accepted.'}
+                  </p>
                 </div>
                 <div className="inspector-block">
                   <h3>Validation</h3>
@@ -174,7 +263,7 @@ export function TileInspector() {
                                       onClick={() => selectTile(match.targetTileId)}
                                       aria-label={`Select compatible tile ${getTileName(match.targetTileId)} on ${match.targetSide}${match.targetRotation === 0 ? '' : ` rotated ${match.targetRotation} degrees`}`}
                                     >
-                                      <TilePreview tile={targetTile} labels={labels} size="tiny" />
+                                      <TilePreview tile={targetTile} labels={labels} rotation={match.targetRotation} size="tiny" />
                                       <span className="compatibility-match__meta">
                                         <span>{getTileName(match.targetTileId)}</span>
                                         <span>
